@@ -12,6 +12,9 @@ Parameters:
     Type: String
     Default: http://localhost:3000
     Description: CORS origin for API Gateway
+  LocalstackEndpoint:          # Add this
+    Type: String
+    Default: ""                # Empty in prod, set locally via samconfig
 
 Globals:
   Function:
@@ -25,6 +28,7 @@ Globals:
         IMAGES_BUCKET_NAME: !Ref ImagesBucket
         POWERTOOLS_SERVICE_NAME: GardenClub
         LOG_LEVEL: INFO
+        LOCALSTACK_ENDPOINT: !Ref LocalstackEndpoint   # Add this
 
 Resources:
   # Cognito User Pool
@@ -122,6 +126,8 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
       CorsConfiguration:
         CorsRules:
           - AllowedOrigins:
@@ -132,7 +138,7 @@ Resources:
               - GET
             AllowedHeaders:
               - '*'
-            MaxAgeSeconds: 3000
+            MaxAge: 3000
 
   # API Gateway HTTP API
   GardenClubApi:

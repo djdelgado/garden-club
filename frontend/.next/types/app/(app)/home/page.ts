@@ -1,4 +1,4 @@
-// File: /home/djdelgado/projects/garden-club/frontend/src/app/(app)/home/page.tsx
+// File: /Users/daviddelgado/Documents/projects/garden-club/frontend/src/app/(app)/home/page.tsx
 import * as entry from '../../../../../src/app/(app)/home/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

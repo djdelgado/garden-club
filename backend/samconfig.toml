@@ -1,11 +1,13 @@
 version = 0.1
 
-[local]
-[local.build]
+[default.build.parameters]
 profile = "default"
 
-[local.start_api]
-docker_network = "localstack_default"
-skip_pull_image = false
+[default.local_start_api.parameters]
+docker_network = "garden-club_localstack_default"
+skip_pull_image = true
 parameter_overrides = "CorsOrigin=http://localhost:3000"
 env_vars = "env.json"
+warm_containers = "EAGER"
+port = 3001
+LocalstackEndpoint="http://garden-club-localstack:4566"
