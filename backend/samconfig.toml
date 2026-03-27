@@ -1,0 +1,11 @@
+version = 0.1
+
+[local]
+[local.build]
+profile = "default"
+
+[local.start_api]
+docker_network = "localstack_default"
+skip_pull_image = false
+parameter_overrides = "CorsOrigin=http://localhost:3000"
+env_vars = "env.json"

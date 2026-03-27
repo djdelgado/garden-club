@@ -1,0 +1,19 @@
+{
+  "name": "garden-club",
+  "version": "0.1.0",
+  "description": "Community garden club web application",
+  "private": true,
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm run start",
+    "lint": "cd frontend && npm run lint",
+    "local:up": "docker-compose up -d && sleep 5 && bash scripts/setup-local.sh",
+    "local:down": "docker-compose down",
+    "local:api": "cd backend && sam local start-api --env-vars env.json --docker-network garden-club_localstack_default --port 3001"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ]
+}

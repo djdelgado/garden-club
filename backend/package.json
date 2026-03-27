@@ -1,0 +1,10 @@
+{
+  "name": "garden-club-backend",
+  "version": "0.1.0",
+  "description": "Garden Club backend AWS Lambda functions",
+  "private": true,
+  "scripts": {
+    "build": "sam build",
+    "local": "sam local start-api --env-vars env.json --docker-network localstack_default"
+  }
+}

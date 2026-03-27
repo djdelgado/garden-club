@@ -1,0 +1,14 @@
+FROM public.ecr.aws/lambda/python:3.12
+
+# Copy requirements files
+COPY functions/events/requirements.txt /tmp/events-requirements.txt
+COPY functions/images/requirements.txt /tmp/images-requirements.txt
+COPY functions/upload/requirements.txt /tmp/upload-requirements.txt
+
+# Install all dependencies
+RUN pip install -r /tmp/events-requirements.txt && \
+    pip install -r /tmp/images-requirements.txt && \
+    pip install -r /tmp/upload-requirements.txt
+
+# Keep the original Lambda runtime
+ENTRYPOINT ["/lambda-entrypoint.sh"]
