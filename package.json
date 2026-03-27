@@ -10,7 +10,7 @@
     "lint": "cd frontend && npm run lint",
     "local:up": "docker-compose up -d && sleep 5 && bash scripts/setup-local.sh",
     "local:down": "docker-compose down",
-    "local:api": "cd backend && sam local start-api --env-vars env.json --docker-network garden-club_localstack_default --port 3001"
+    "local:api": "cd backend && sam local start-api"
   },
   "workspaces": [
     "frontend",

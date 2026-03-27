@@ -8,7 +8,13 @@ from aws_lambda_powertools import Logger
 from pydantic import BaseModel, ValidationError
 
 logger = Logger()
-dynamodb = boto3.resource("dynamodb")
+dynamodb = boto3.resource(
+    "dynamodb",
+    endpoint_url=os.environ.get("LOCALSTACK_ENDPOINT"),
+    region_name=os.environ.get("AWS_REGION", "us-east-1"),
+    aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
+    aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
+)
 events_table = dynamodb.Table(os.environ.get("EVENTS_TABLE_NAME", "GardenClubEvents"))
 
 
@@ -115,6 +121,11 @@ def delete_event(event_id: str) -> Dict[str, Any]:
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    logger.info({
+        "endpoint": os.environ.get("LOCALSTACK_ENDPOINT"),
+        "access_key": os.environ.get("AWS_ACCESS_KEY_ID"),
+        "table": os.environ.get("EVENTS_TABLE_NAME"),
+    })
     """Main Lambda handler for events"""
     logger.info(f"Received request: {event}")
 

@@ -29,6 +29,7 @@ fi
 
 # Export LocalStack endpoint
 export AWS_ENDPOINT_URL=http://localhost:4566
+export LOCALSTACK_ENDPOINT_URL=http://localhost:4566
 export AWS_REGION=us-east-1
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
@@ -98,6 +99,7 @@ AWS_REGION=us-east-1
 
 # LocalStack - Backend Only
 AWS_ENDPOINT_URL=http://localhost:4566
+LOCALSTACK_ENDPOINT_URL=http://garden-club-localstack:4566
 EVENTS_TABLE_NAME=GardenClubEvents
 IMAGES_TABLE_NAME=GardenClubImages
 IMAGES_BUCKET_NAME=garden-club-images
