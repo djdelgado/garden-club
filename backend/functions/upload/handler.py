@@ -45,49 +45,82 @@ def generate_presigned_url(bucket: str, key: str, expiration: int = 3600) -> str
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """POST /upload/presign - Generate presigned URL for file upload"""
+    """POST /upload/presign - Generate presigned URLs for file uploads"""
     logger.info(f"Received upload presign request: {event}")
 
     try:
         body = json.loads(event.get("body", "{}"))
-        event_id = body.get("eventId")
-        file_name = body.get("fileName")
-        content_type = body.get("contentType", "image/jpeg")
+        folder_name = body.get("folderName")
+        files = body.get("files", [])  # Array of file objects
 
-        if not event_id or not file_name:
+        if not folder_name:
             return format_response(
                 400,
-                {"error": "Missing required fields: eventId, fileName"}
+                {"error": "Missing required field: folderName"}
             )
 
-        # Generate S3 key and image ID
-        image_id = str(uuid4())
-        s3_key = f"{event_id}/{image_id}/{file_name}"
+        if not files or not isinstance(files, list):
+            return format_response(
+                400,
+                {"error": "Missing or invalid field: files (must be an array)"}
+            )
 
-        # Generate presigned URL
-        upload_url = generate_presigned_url(images_bucket, s3_key)
-
-        # Store image metadata in DynamoDB
+        # Check if folder already has images
         user_id = get_user_id(event)
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(datetime.timezone.utc).isoformat()
 
-        image_item = {
-            "imageId": image_id,
-            "eventId": event_id,
-            "s3Key": s3_key,
-            "fileName": file_name,
-            "uploadedAt": now,
-            "uploadedBy": user_id,
-        }
+        images_response = images_table.query(
+            IndexName="FolderNameIndex",
+            KeyConditionExpression="folderName = :folder_name",
+            ExpressionAttributeValues={":folder_name": folder_name},
+            Limit=1,
+        )
+        folder_has_images = len(images_response.get("Items", [])) > 0
 
-        images_table.put_item(Item=image_item)
+        upload_results = []
+
+        for idx, file_obj in enumerate(files):
+            file_name = file_obj.get("fileName")
+
+            if not file_name:
+                continue
+
+            # Generate S3 key and image ID
+            image_id = str(uuid4())
+            s3_key = f"{folder_name}/{image_id}/{file_name}"
+
+            # Only mark first image as thumbnail if folder is empty
+            is_thumbnail = (idx == 0 and not folder_has_images)
+
+            # Generate presigned URL
+            upload_url = generate_presigned_url(images_bucket, s3_key)
+
+            # Store image metadata in DynamoDB
+            image_item = {
+                "imageId": image_id,
+                "folderName": folder_name,
+                "s3Key": s3_key,
+                "fileName": file_name,
+                "uploadedAt": now,
+                "uploadedBy": user_id,
+                "isThumbnail": is_thumbnail,
+            }
+
+            images_table.put_item(Item=image_item)
+
+            upload_results.append({
+                "fileName": file_name,
+                "imageId": image_id,
+                "uploadUrl": upload_url,
+                "imageKey": s3_key,
+                "isThumbnail": is_thumbnail,
+            })
 
         return format_response(
             200,
             {
-                "uploadUrl": upload_url,
-                "imageKey": s3_key,
-                "imageId": image_id,
+                "uploads": upload_results,
+                "count": len(upload_results),
             }
         )
 
@@ -96,5 +129,5 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return format_response(400, {"error": "Invalid JSON body"})
 
     except Exception as err:
-        logger.exception("Error generating presigned URL")
+        logger.exception("Error generating presigned URLs")
         return format_response(500, {"error": str(err)})

@@ -95,15 +95,15 @@ Resources:
       AttributeDefinitions:
         - AttributeName: imageId
           AttributeType: S
-        - AttributeName: eventId
+        - AttributeName: folderName
           AttributeType: S
       KeySchema:
         - AttributeName: imageId
           KeyType: HASH
       GlobalSecondaryIndexes:
-        - IndexName: EventIdIndex
+        - IndexName: FolderNameIndex
           KeySchema:
-            - AttributeName: eventId
+            - AttributeName: folderName
               KeyType: HASH
           Projection:
             ProjectionType: ALL
@@ -204,11 +204,14 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:Query
+                  - dynamodb:Scan
                   - dynamodb:PutItem
                   - dynamodb:DeleteItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt ImagesTable.Arn
               - Effect: Allow
                 Action:
+                  - s3:GetObject
                   - s3:DeleteObject
                 Resource: !Sub '${ImagesBucket.Arn}/*'
 
@@ -291,6 +294,12 @@ Resources:
           Properties:
             ApiId: !Ref GardenClubApi
             Path: /images
+            Method: GET
+        GetFolders:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /images/folders
             Method: GET
         DeleteImage:
           Type: HttpApi
