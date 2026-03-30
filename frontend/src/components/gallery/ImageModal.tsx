@@ -4,6 +4,7 @@ import { Modal, Box, IconButton, Typography } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import { GardenImage } from "@/types/image";
 import Image from "next/image";
+import { IMAGES_BASE_URL } from "@/lib/constants";
 
 interface ImageModalProps {
   image: GardenImage;
@@ -50,7 +51,7 @@ export function ImageModal({ image, onClose }: ImageModalProps) {
 
         <Box sx={{ p: 2 }}>
           <Image
-            src={`https://s3.localhost.localstack.cloud:4566/garden-club-images/${image.s3Key}`}
+            src={`${IMAGES_BASE_URL}/${image.s3Key}`}
             alt={image.fileName}
             width={1000}
             height={1000}

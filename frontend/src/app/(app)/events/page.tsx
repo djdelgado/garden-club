@@ -9,20 +9,20 @@ import {
   Fab,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import { useRouter } from "next/navigation";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { apiGet } from "@/lib/api";
 import { Event } from "@/types/event";
 import { EventList } from "@/components/events/EventList";
 import { CreateEventModal } from "@/components/events/CreateEventModal";
+import { EventDetailModal } from "@/components/events/EventDetailModal";
 
 export default function EventsPage() {
-  const router = useRouter();
   const { isAdmin } = useIsAdmin();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openCreateModal, setOpenCreateModal] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
   useEffect(() => {
     loadEvents();
@@ -42,7 +42,8 @@ export default function EventsPage() {
   };
 
   const handleEventClick = (eventId: string) => {
-    router.push(`/events/${eventId}`);
+    const event = events.find((e) => e.eventId === eventId) ?? null;
+    setSelectedEvent(event);
   };
 
   return (
@@ -91,6 +92,11 @@ export default function EventsPage() {
             />
           </>
         )}
+
+        <EventDetailModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+        />
       </Box>
     </Container>
   );

@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 from uuid import uuid4
 
@@ -78,7 +78,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Check if folder already has images
         user_id = get_user_id(event)
-        now = datetime.now(datetime.timezone.utc).isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         images_response = images_table.query(
             IndexName="FolderNameIndex",

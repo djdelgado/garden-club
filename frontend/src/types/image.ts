@@ -1,9 +1,9 @@
 export interface GardenImage {
   imageId: string;
-  eventId: string;
+  folderName: string;
   s3Key: string;
   fileName: string;
   uploadedAt: string;
   uploadedBy: string;
-  tags?: string[];
+  isThumbnail: boolean;
 }

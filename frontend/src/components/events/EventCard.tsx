@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardMedia,
-  Typography,
-  Box,
-  Chip,
-} from "@mui/material";
+import { Card, CardContent, Typography, Box } from "@mui/material";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import { Event } from "@/types/event";
-import Image from "next/image";
 
 interface EventCardProps {
   event: Event;
@@ -17,61 +10,58 @@ interface EventCardProps {
 }
 
 export function EventCard({ event, onClick }: EventCardProps) {
-  const headerImage = event.headerImageKey
-    ? `https://s3.localhost.localstack.cloud:4566/garden-club-images/${event.headerImageKey}`
-    : "/default-event-banner.jpg";
-
   const startDate = new Date(event.startTime);
   const endDate = new Date(event.endTime);
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const month = startDate.toLocaleString("en-US", { month: "short" });
+  const day = startDate.getDate();
+
+  const formatTime = (date: Date) =>
+    date.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
 
   return (
     <Card
       onClick={onClick}
       sx={{
         cursor: "pointer",
-        height: "100%",
         display: "flex",
-        flexDirection: "column",
+        flexDirection: "row",
+        height: 110,
+        "&:hover": { boxShadow: 4 },
       }}
     >
-      <CardMedia sx={{ height: 200, position: "relative" }}>
-        <Image
-          src={headerImage}
-          alt={event.title}
-          fill
-          style={{ objectFit: "cover" }}
-        />
-      </CardMedia>
-      <CardContent sx={{ flex: 1 }}>
-        <Typography variant="h6" gutterBottom>
+      <Box
+        sx={{
+          width: 80,
+          minWidth: 80,
+          bgcolor: "primary.main",
+          color: "primary.contrastText",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 0.5,
+        }}
+      >
+        <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1 }}>
+          {month.toUpperCase()}
+        </Typography>
+        <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1 }}>
+          {day}
+        </Typography>
+        <CalendarTodayIcon sx={{ fontSize: 14 }} />
+      </Box>
+      <CardContent sx={{ flex: 1, py: 1.5, "&:last-child": { pb: 1.5 } }}>
+        <Typography variant="h6" noWrap>
           {event.title}
         </Typography>
-        <Typography variant="body2" color="text.secondary" paragraph>
-          {event.description.substring(0, 100)}
-          {event.description.length > 100 ? "..." : ""}
+        <Typography variant="body2" color="text.secondary" noWrap>
+          {event.description.substring(0, 80)}
+          {event.description.length > 80 ? "..." : ""}
         </Typography>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          <Chip
-            label={formatTime(startDate)}
-            size="small"
-            color="primary"
-            variant="outlined"
-          />
-          <Chip
-            label={`Ends: ${formatTime(endDate)}`}
-            size="small"
-            variant="outlined"
-          />
-        </Box>
+        <Typography variant="caption" color="text.secondary">
+          {formatTime(startDate)} – {formatTime(endDate)}
+        </Typography>
       </CardContent>
     </Card>
   );

@@ -5,91 +5,49 @@ import {
   Box,
   Container,
   Typography,
-  Grid,
-  Dialog,
-  TextField,
-  Button,
-  CircularProgress,
   Alert,
   Fab,
+  Grid2,
+  CircularProgress,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import { useRouter } from "next/navigation";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { apiGet, apiPost } from "@/lib/api";
-import { Event } from "@/types/event";
-import { EventFolder } from "@/components/gallery/EventFolder";
-import { v4 as uuidv4 } from "uuid";
+import { apiGet } from "@/lib/api";
+import { ImageFolder } from "@/types/gallery";
+import { AlbumCard } from "@/components/gallery/AlbumCard";
+import { CreateAlbumDialog } from "@/components/gallery/CreateAlbumDialog";
 
 export default function GalleryPage() {
+  const router = useRouter();
   const { isAdmin } = useIsAdmin();
-  const [events, setEvents] = useState<Event[]>([]);
+  const [folders, setFolders] = useState<ImageFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [openCreateDialog, setOpenCreateDialog] = useState(false);
-  const [createLoading, setCreateLoading] = useState(false);
-  const [albumName, setAlbumName] = useState("");
+  const [openDialog, setOpenDialog] = useState(false);
 
   useEffect(() => {
-    loadEvents();
+    loadFolders();
   }, []);
 
-  const loadEvents = async () => {
+  const loadFolders = async () => {
     try {
       setLoading(true);
-      const data = await apiGet<Event[]>("/events");
-      setEvents(data);
+      const data = await apiGet<{ folders: ImageFolder[] }>("/images/folders");
+      setFolders(data.folders);
     } catch (err) {
-      setError("Failed to load events");
+      setError("Failed to load albums");
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateEvent = async () => {
-    if (!albumName.trim()) return;
-
-    try {
-      setCreateLoading(true);
-      const now = new Date();
-      const startTime = now.toISOString();
-      const endTime = new Date(now.getTime() + 3600000).toISOString();
-
-      const newEvent = {
-        eventId: uuidv4(),
-        title: albumName,
-        description: `Photo gallery: ${albumName}`,
-        startTime,
-        endTime,
-      };
-
-      await apiPost("/events", newEvent);
-      await loadEvents();
-      setOpenCreateDialog(false);
-      setAlbumName("");
-    } catch (err) {
-      setError("Failed to create event");
-      console.error(err);
-    } finally {
-      setCreateLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <Container maxWidth="lg">
-        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-          <CircularProgress />
-        </Box>
-      </Container>
-    );
-  }
-
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
         <Typography variant="h2" gutterBottom>
-          Photo Gallery
+          Gallery
         </Typography>
 
         {error && (
@@ -98,65 +56,52 @@ export default function GalleryPage() {
           </Alert>
         )}
 
-        <Grid container spacing={3} sx={{ mt: 1 }}>
-          {events.map((event) => (
-            <Grid item xs={12} sm={6} md={4} key={event.eventId}>
-              <EventFolder
-                event={event}
-                imageCount={0}
-                onClick={() => {
-                  // Navigate to event gallery detail
-                }}
-              />
-            </Grid>
-          ))}
-        </Grid>
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+            <CircularProgress />
+          </Box>
+        ) : folders.length === 0 ? (
+          <Box sx={{ textAlign: "center", py: 8 }}>
+            <Typography variant="body1" color="text.secondary">
+              No albums yet
+            </Typography>
+          </Box>
+        ) : (
+          <Grid2 container spacing={3} sx={{ mt: 1 }}>
+            {folders.map((folder) => (
+              <Grid2 size={{ xs: 12, sm: 6, md: 4 }} key={folder.folderName}>
+                <AlbumCard
+                  folder={folder}
+                  onClick={() =>
+                    router.push(
+                      `/gallery/${encodeURIComponent(folder.folderName)}`
+                    )
+                  }
+                />
+              </Grid2>
+            ))}
+          </Grid2>
+        )}
 
         {isAdmin && (
           <>
             <Fab
               color="primary"
-              aria-label="add"
-              onClick={() => setOpenCreateDialog(true)}
-              sx={{
-                position: "fixed",
-                bottom: 16,
-                right: 16,
-              }}
+              aria-label="add album"
+              onClick={() => setOpenDialog(true)}
+              sx={{ position: "fixed", bottom: 16, right: 16 }}
             >
               <AddIcon />
             </Fab>
 
-            <Dialog open={openCreateDialog} onClose={() => setOpenCreateDialog(false)}>
-              <Box sx={{ p: 3, minWidth: 400 }}>
-                <Typography variant="h6" gutterBottom>
-                  Create New Album
-                </Typography>
-                <TextField
-                  fullWidth
-                  label="Album Name"
-                  value={albumName}
-                  onChange={(e) => setAlbumName(e.target.value)}
-                  disabled={createLoading}
-                  sx={{ mb: 2 }}
-                />
-                <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
-                  <Button
-                    onClick={() => setOpenCreateDialog(false)}
-                    disabled={createLoading}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="contained"
-                    onClick={handleCreateEvent}
-                    disabled={createLoading || !albumName.trim()}
-                  >
-                    {createLoading ? <CircularProgress size={20} /> : "Create"}
-                  </Button>
-                </Box>
-              </Box>
-            </Dialog>
+            <CreateAlbumDialog
+              open={openDialog}
+              onClose={() => setOpenDialog(false)}
+              onAlbumCreated={() => {
+                setOpenDialog(false);
+                loadFolders();
+              }}
+            />
           </>
         )}
       </Box>

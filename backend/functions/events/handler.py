@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 import boto3
@@ -46,10 +46,16 @@ def get_user_id(event: Dict[str, Any]) -> str:
 
 
 def get_events(event: Dict[str, Any]) -> Dict[str, Any]:
-    """GET /events - List all events"""
+    """GET /events - Upcoming events + past 30 days, sorted by startTime"""
     try:
-        response = events_table.scan(Limit=100)
+        cutoff = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        response = events_table.scan(
+            FilterExpression="#st >= :cutoff",
+            ExpressionAttributeNames={"#st": "startTime"},
+            ExpressionAttributeValues={":cutoff": cutoff},
+        )
         items = response.get("Items", [])
+        items.sort(key=lambda x: x.get("startTime", ""))
         return format_response(200, items)
     except Exception as err:
         logger.exception("Error listing events")

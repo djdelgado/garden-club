@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -11,7 +11,9 @@ import {
   Box,
   CircularProgress,
   Alert,
+  Typography,
 } from "@mui/material";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
@@ -35,8 +37,34 @@ export function CreateEventModal({
   const [endTime, setEndTime] = useState<Date | null>(
     new Date(Date.now() + 3600000)
   );
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerKey, setBannerKey] = useState<string | null>(null);
+  const [bannerUploading, setBannerUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleBannerSelect = async (file: File) => {
+    setBannerFile(file);
+    setBannerUploading(true);
+    setError(null);
+    try {
+      const presignRes = await apiPost<{
+        uploads: { uploadUrl: string; imageKey: string }[];
+      }>("/upload/presign", {
+        folderName: "event-banners",
+        files: [{ fileName: file.name }],
+      });
+      const { uploadUrl, imageKey } = presignRes.uploads[0];
+      await fetch(uploadUrl, { method: "PUT", body: file });
+      setBannerKey(imageKey);
+    } catch {
+      setError("Failed to upload banner image");
+      setBannerFile(null);
+    } finally {
+      setBannerUploading(false);
+    }
+  };
 
   const handleCreate = async () => {
     if (!title.trim() || !description.trim() || !startTime || !endTime) {
@@ -48,7 +76,7 @@ export function CreateEventModal({
       setLoading(true);
       setError(null);
 
-      const newEvent = {
+      const newEvent: Record<string, unknown> = {
         eventId: uuidv4(),
         title,
         description,
@@ -56,13 +84,15 @@ export function CreateEventModal({
         endTime: endTime.toISOString(),
       };
 
+      if (bannerKey) {
+        newEvent.headerImageKey = bannerKey;
+      }
+
       await apiPost("/events", newEvent);
       onEventCreated();
       handleClose();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create event"
-      );
+      setError(err instanceof Error ? err.message : "Failed to create event");
     } finally {
       setLoading(false);
     }
@@ -73,6 +103,8 @@ export function CreateEventModal({
     setDescription("");
     setStartTime(new Date());
     setEndTime(new Date(Date.now() + 3600000));
+    setBannerFile(null);
+    setBannerKey(null);
     setError(null);
     onClose();
   };
@@ -116,16 +148,50 @@ export function CreateEventModal({
               disabled={loading}
             />
           </LocalizationProvider>
+
+          <Box>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              Banner Image (optional)
+            </Typography>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleBannerSelect(file);
+              }}
+            />
+            <Button
+              variant="outlined"
+              startIcon={bannerUploading ? <CircularProgress size={18} /> : <CloudUploadIcon />}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading || bannerUploading}
+              size="small"
+            >
+              {bannerUploading
+                ? "Uploading..."
+                : bannerFile
+                ? bannerFile.name
+                : "Choose Image"}
+            </Button>
+            {bannerKey && (
+              <Typography variant="caption" color="success.main" sx={{ ml: 1 }}>
+                Uploaded
+              </Typography>
+            )}
+          </Box>
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
+        <Button onClick={handleClose} disabled={loading || bannerUploading}>
           Cancel
         </Button>
         <Button
           onClick={handleCreate}
           variant="contained"
-          disabled={loading}
+          disabled={loading || bannerUploading}
           startIcon={loading ? <CircularProgress size={20} /> : undefined}
         >
           {loading ? "Creating..." : "Create Event"}

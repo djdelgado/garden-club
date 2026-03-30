@@ -78,15 +78,15 @@ Resources:
       AttributeDefinitions:
         - AttributeName: eventId
           AttributeType: S
-        - AttributeName: createdAt
+        - AttributeName: startTime
           AttributeType: S
       KeySchema:
         - AttributeName: eventId
           KeyType: HASH
       GlobalSecondaryIndexes:
-        - IndexName: CreatedAtIndex
+        - IndexName: StartTimeIndex
           KeySchema:
-            - AttributeName: createdAt
+            - AttributeName: startTime
               KeyType: HASH
           Projection:
             ProjectionType: ALL
