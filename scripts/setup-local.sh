@@ -56,11 +56,11 @@ awslocal dynamodb create-table \
   --table-name GardenClubImages \
   --attribute-definitions \
     AttributeName=imageId,AttributeType=S \
-    AttributeName=eventId,AttributeType=S \
+    AttributeName=folderName,AttributeType=S \
   --key-schema \
     AttributeName=imageId,KeyType=HASH \
   --global-secondary-indexes \
-    "IndexName=EventIdIndex,KeySchema=[{AttributeName=eventId,KeyType=HASH}],Projection={ProjectionType=ALL},ProvisionedThroughput={ReadCapacityUnits=10,WriteCapacityUnits=10}" \
+    "IndexName=FolderNameIndex,KeySchema=[{AttributeName=folderName,KeyType=HASH}],Projection={ProjectionType=ALL},ProvisionedThroughput={ReadCapacityUnits=10,WriteCapacityUnits=10}" \
   --billing-mode PAY_PER_REQUEST \
   2>/dev/null || echo "Images table already exists"
 

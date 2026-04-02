@@ -12,9 +12,14 @@ Parameters:
     Type: String
     Default: http://localhost:3000
     Description: CORS origin for API Gateway
-  LocalstackEndpoint:          # Add this
+  LocalstackEndpoint:
     Type: String
-    Default: ""                # Empty in prod, set locally via samconfig
+    Default: ''
+    Description: LocalStack endpoint (local only)
+  S3PublicEndpoint:
+    Type: String
+    Default: ''
+    Description: Public S3 endpoint for presigned URLs (localhost:4566 for local, empty for AWS)
 
 Globals:
   Function:
@@ -28,7 +33,8 @@ Globals:
         IMAGES_BUCKET_NAME: !Ref ImagesBucket
         POWERTOOLS_SERVICE_NAME: GardenClub
         LOG_LEVEL: INFO
-        LOCALSTACK_ENDPOINT: !Ref LocalstackEndpoint   # Add this
+        LOCALSTACK_ENDPOINT: !Ref LocalstackEndpoint
+        S3_PUBLIC_ENDPOINT: !Ref S3PublicEndpoint
 
 Resources:
   # Cognito User Pool
@@ -116,7 +122,7 @@ Resources:
   ImagesBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'garden-club-images-${AWS::AccountId}'
+      BucketName: !Sub garden-club-images-${AWS::AccountId}
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -219,7 +225,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:DeleteObject
-                Resource: !Sub '${ImagesBucket.Arn}/*'
+                Resource: !Sub ${ImagesBucket.Arn}/*
 
   UploadLambdaRole:
     Type: AWS::IAM::Role
@@ -241,7 +247,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub '${ImagesBucket.Arn}/*'
+                Resource: !Sub ${ImagesBucket.Arn}/*
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
@@ -332,7 +338,7 @@ Resources:
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL
-    Value: !Sub 'https://${GardenClubApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}'
+    Value: !Sub https://${GardenClubApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}
   UserPoolId:
     Description: Cognito User Pool ID
     Value: !Ref GardenClubUserPool
