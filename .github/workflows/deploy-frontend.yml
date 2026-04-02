@@ -1,0 +1,36 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'frontend/**'
+
+jobs:
+  notify:
+    name: Post Amplify URL
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Post Amplify app URL to job summary
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            APP_URL="${{ secrets.AMPLIFY_APP_URL_PROD }}"
+            ENV_LABEL="prod"
+          else
+            APP_URL="${{ secrets.AMPLIFY_APP_URL_DEV }}"
+            ENV_LABEL="dev"
+          fi
+          echo "## Frontend Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** \`${ENV_LABEL}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Amplify App URL:** ${APP_URL}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Amplify is building and deploying this push automatically via its webhook." >> $GITHUB_STEP_SUMMARY

@@ -43,3 +43,12 @@ coverage/
 # SAM
 .aws-sam/
 sam-tests/
+
+# AWS credentials/config
+.aws/
+
+# SAM local env vars (may contain secrets — use backend/.env.example as reference)
+backend/env.json
+
+# Frontend build output (path-specific, in addition to root /.next/)
+frontend/.next/
