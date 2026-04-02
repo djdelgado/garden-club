@@ -1,7 +1,5 @@
 version = 0.1
 
-[default.build.parameters]
-profile = "default"
 
 [default.local_start_api.parameters]
 docker_network      = "garden-club_localstack_default"
