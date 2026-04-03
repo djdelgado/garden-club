@@ -1,7 +1,7 @@
 "use client";
 
 import { Amplify } from "aws-amplify";
-import { USER_POOL_ID, USER_POOL_CLIENT_ID, AWS_REGION } from "./constants";
+import { USER_POOL_ID, USER_POOL_CLIENT_ID } from "./constants";
 
 Amplify.configure(
   {
