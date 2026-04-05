@@ -5,6 +5,7 @@ applications:
       phases:
         preBuild:
           commands:
+            - nvm use 20 || node --version
             - npm install
         build:
           commands:
@@ -13,8 +14,8 @@ applications:
         baseDirectory: frontend/.next
         files:
           - '**/*'
-      cache:
-        paths:
-          - frontend/node_modules/**/*
-          - frontend/.next/cache/**/*
+      # cache:
+      #   paths:
+      #     - frontend/node_modules/**/*
+      #     - frontend/.next/cache/**/*
     appRoot: frontend
