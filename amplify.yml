@@ -5,14 +5,10 @@ applications:
       phases:
         preBuild:
           commands:
-            - cd frontend
             - npm install
         build:
           commands:
-            - npm run build
-        postBuild:
-          commands:
-            - ls -la .next/ | head -20
+            - npm run build --workspace=frontend
       artifacts:
         baseDirectory: frontend/.next
         files:
