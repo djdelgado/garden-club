@@ -11,11 +11,13 @@ applications:
           commands:
             - npm run build
       artifacts:
-        baseDirectory: frontend/.next/standalone
+        baseDirectory: frontend
         files:
-          - '**/*'
-        excludeFiles:
-          - '**/*.map'
+          - '.next/**/*'
+          - 'package.json'
+          - 'package-lock.json'
+          - 'node_modules/**/*'
+          - 'public/**/*'
       cache:
         paths:
           - frontend/node_modules/**/*
