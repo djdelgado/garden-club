@@ -12,9 +12,14 @@ Parameters:
     Type: String
     Default: http://localhost:3000
     Description: CORS origin for API Gateway
-  LocalstackEndpoint:          # Add this
+  LocalstackEndpoint:
     Type: String
-    Default: ""                # Empty in prod, set locally via samconfig
+    Default: ''
+    Description: LocalStack endpoint (local only)
+  S3PublicEndpoint:
+    Type: String
+    Default: ''
+    Description: Public S3 endpoint for presigned URLs (localhost:4566 for local, empty for AWS)
 
 Globals:
   Function:
@@ -28,14 +33,15 @@ Globals:
         IMAGES_BUCKET_NAME: !Ref ImagesBucket
         POWERTOOLS_SERVICE_NAME: GardenClub
         LOG_LEVEL: INFO
-        LOCALSTACK_ENDPOINT: !Ref LocalstackEndpoint   # Add this
+        LOCALSTACK_ENDPOINT: !Ref LocalstackEndpoint
+        S3_PUBLIC_ENDPOINT: !Ref S3PublicEndpoint
 
 Resources:
   # Cognito User Pool
   GardenClubUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: GardenClubUserPool
+      UserPoolName: !Sub 'GardenClubUserPool-${Stage}'
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -54,7 +60,7 @@ Resources:
   GardenClubUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: GardenClubAppClient
+      ClientName: !Sub 'GardenClubAppClient-${Stage}'
       UserPoolId: !Ref GardenClubUserPool
       ExplicitAuthFlows:
         - ALLOW_USER_PASSWORD_AUTH
@@ -73,7 +79,7 @@ Resources:
   EventsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: GardenClubEvents
+      TableName: !Sub 'GardenClubEvents-${Stage}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: eventId
@@ -94,7 +100,7 @@ Resources:
   ImagesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: GardenClubImages
+      TableName: !Sub 'GardenClubImages-${Stage}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: imageId
@@ -116,7 +122,7 @@ Resources:
   ImagesBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'garden-club-images-${AWS::AccountId}'
+      BucketName: !Sub 'garden-club-images-${AWS::AccountId}-${Stage}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -188,7 +194,9 @@ Resources:
                   - dynamodb:DeleteItem
                   - dynamodb:Query
                   - dynamodb:Scan
-                Resource: !GetAtt EventsTable.Arn
+                Resource:
+                  - !GetAtt EventsTable.Arn
+                  - !Sub '${EventsTable.Arn}/index/*'
 
   ImagesLambdaRole:
     Type: AWS::IAM::Role
@@ -214,12 +222,14 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:DeleteItem
                   - dynamodb:UpdateItem
-                Resource: !GetAtt ImagesTable.Arn
+                Resource:
+                  - !GetAtt ImagesTable.Arn
+                  - !Sub '${ImagesTable.Arn}/index/*'
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:DeleteObject
-                Resource: !Sub '${ImagesBucket.Arn}/*'
+                Resource: !Sub ${ImagesBucket.Arn}/*
 
   UploadLambdaRole:
     Type: AWS::IAM::Role
@@ -241,7 +251,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
-                Resource: !Sub '${ImagesBucket.Arn}/*'
+                Resource: !Sub ${ImagesBucket.Arn}/*
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
@@ -251,7 +261,7 @@ Resources:
   EventsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: GardenClubEventsFunction
+      FunctionName: !Sub 'GardenClubEventsFunction-${Stage}'
       CodeUri: functions/events/
       Handler: handler.lambda_handler
       Role: !GetAtt EventsLambdaRole.Arn
@@ -290,7 +300,7 @@ Resources:
   ImagesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: GardenClubImagesFunction
+      FunctionName: !Sub 'GardenClubImagesFunction-${Stage}'
       CodeUri: functions/images/
       Handler: handler.lambda_handler
       Role: !GetAtt ImagesLambdaRole.Arn
@@ -317,7 +327,7 @@ Resources:
   UploadFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: GardenClubUploadFunction
+      FunctionName: !Sub 'GardenClubUploadFunction-${Stage}'
       CodeUri: functions/upload/
       Handler: handler.lambda_handler
       Role: !GetAtt UploadLambdaRole.Arn
@@ -332,7 +342,7 @@ Resources:
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL
-    Value: !Sub 'https://${GardenClubApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}'
+    Value: !Sub https://${GardenClubApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}
   UserPoolId:
     Description: Cognito User Pool ID
     Value: !Ref GardenClubUserPool

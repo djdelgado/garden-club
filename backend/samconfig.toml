@@ -4,10 +4,30 @@ version = 0.1
 profile = "default"
 
 [default.local_start_api.parameters]
-docker_network = "garden-club_localstack_default"
-skip_pull_image = true
+docker_network      = "garden-club_localstack_default"
+skip_pull_image     = true
 parameter_overrides = "CorsOrigin=http://localhost:3000"
-env_vars = "env.json"
-warm_containers = "EAGER"
-port = 3001
-LocalstackEndpoint="http://garden-club-localstack:4566"
+env_vars            = "env.json"
+warm_containers     = "EAGER"
+port                = 3001
+LocalstackEndpoint  = "http://garden-club-localstack:4566"
+
+# Deploy: sam deploy --config-env dev
+[dev.deploy.parameters]
+stack_name          = "garden-club-dev"
+resolve_s3          = true
+region              = "us-east-1"
+capabilities        = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+parameter_overrides = "Stage=dev CorsOrigin=https://dev.YOUR_DOMAIN.com"
+confirm_changeset   = false
+disable_rollback    = false
+
+# Deploy: sam deploy --config-env prod
+[prod.deploy.parameters]
+stack_name          = "garden-club-prod"
+resolve_s3          = true
+region              = "us-east-1"
+capabilities        = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
+parameter_overrides = "Stage=prod CorsOrigin=https://www.YOUR_DOMAIN.com"
+confirm_changeset   = false
+disable_rollback    = false

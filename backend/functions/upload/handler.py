@@ -52,6 +52,13 @@ def generate_presigned_url(bucket: str, key: str, expiration: int = 3600) -> str
         Params={"Bucket": bucket, "Key": key},
         ExpiresIn=expiration,
     )
+    # Replace internal endpoint with public endpoint if configured
+    # In production: S3_PUBLIC_ENDPOINT won't be set, URL will use real AWS domain
+    # In local dev: Replace internal Docker hostname with localhost
+    public_endpoint = os.environ.get("S3_PUBLIC_ENDPOINT")
+    if public_endpoint:
+        internal_endpoint = os.environ.get("LOCALSTACK_ENDPOINT")
+        url = url.replace(internal_endpoint, public_endpoint)
     return url
 
 
