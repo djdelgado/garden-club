@@ -1,6 +1,6 @@
 services:
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:3.0.0
     container_name: garden-club-localstack
     ports:
       - "4566:4566"
@@ -14,6 +14,27 @@ services:
     volumes:
       - localstack_data:/var/lib/localstack
       - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - localstack_default
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # These are read from .env.local (created by `npm run local:up`).
+        # Run `npm run local:up` first so the file exists, then `docker compose up frontend`.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_IMAGES_URL: ${NEXT_PUBLIC_IMAGES_URL:-https://s3.localhost.localstack.cloud:4566/garden-club-images}
+        NEXT_PUBLIC_AWS_REGION: ${NEXT_PUBLIC_AWS_REGION:-us-east-1}
+        NEXT_PUBLIC_GOCNITO_USER_POOL_ID: ${NEXT_PUBLIC_GOCNITO_USER_POOL_ID}
+        NEXT_PUBLIC_GOCNITO_CLIENT_ID: ${NEXT_PUBLIC_GOCNITO_CLIENT_ID}
+    image: garden-club-frontend:local
+    container_name: garden-club-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - localstack
     networks:
       - localstack_default
 
