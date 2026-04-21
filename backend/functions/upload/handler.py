@@ -8,19 +8,14 @@ import boto3
 from aws_lambda_powertools import Logger
 
 logger = Logger()
-s3_client = boto3.client("s3",
-    endpoint_url=os.environ.get("LOCALSTACK_ENDPOINT"),
-    region_name=os.environ.get("AWS_REGION", "us-east-1"),
-    aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
-    aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
-)
-dynamodb = boto3.resource(
-    "dynamodb",
-    endpoint_url=os.environ.get("LOCALSTACK_ENDPOINT"),
-    region_name=os.environ.get("AWS_REGION", "us-east-1"),
-    aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
-    aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
-)
+
+# Use LocalStack endpoint in local dev, AWS managed credentials in production
+aws_kwargs = {"region_name": os.environ.get("AWS_REGION", "us-east-1")}
+if localstack_endpoint := os.environ.get("LOCALSTACK_ENDPOINT"):
+    aws_kwargs["endpoint_url"] = localstack_endpoint
+
+s3_client = boto3.client("s3", **aws_kwargs)
+dynamodb = boto3.resource("dynamodb", **aws_kwargs)
 
 images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
 images_table = dynamodb.Table(os.environ.get("IMAGES_TABLE_NAME", "GardenClubImages"))
