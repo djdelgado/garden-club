@@ -64,7 +64,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-actions-ecs-role
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/garden-club-github-${{needs.resolve-env.outputs.env_label}}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -81,7 +81,7 @@ jobs:
           # Store these as GitHub Actions secrets scoped to each environment.
           NEXT_PUBLIC_API_URL:                ${{ secrets.NEXT_PUBLIC_API_URL }}
           NEXT_PUBLIC_IMAGES_URL:             ${{ secrets.NEXT_PUBLIC_IMAGES_URL }}
-          NEXT_PUBLIC_AWS_REGION:             ${{ vars.AWS_REGION }}
+          NEXT_PUBLIC_AWS_REGION:             ${{ env.AWS_REGION }}
           NEXT_PUBLIC_COGNITO_USER_POOL_ID:   ${{ secrets.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
           NEXT_PUBLIC_COGNITO_CLIENT_ID:      ${{ secrets.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
           NEXT_PUBLIC_IMAGES_BUCKET:          ${{ secrets.NEXT_PUBLIC_IMAGES_BUCKET }}
@@ -126,16 +126,17 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-actions-ecs-role
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/garden-club-github-${{needs.resolve-env.outputs.env_label}}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy new image to ECS Express service
         uses: aws-actions/amazon-ecs-deploy-express-service@v1
         with:
-          service: ${{ needs.resolve-env.outputs.ecs_service }}
+          service-name: ${{ needs.resolve-env.outputs.ecs_service }}
           cluster: ${{ needs.resolve-env.outputs.ecs_cluster }}
           image: ${{ needs.build-and-push.outputs.image_uri }}
-          wait-for-service-stability: true
+          execution-role-arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/garden-club-github-${{needs.resolve-env.outputs.env_label}}
+          infrastructure-role-arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/garden-club-github-${{needs.resolve-env.outputs.env_label}}
 
       - name: Post deploy summary
         run: |
