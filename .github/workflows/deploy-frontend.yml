@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_REGION: us-east-1
   ECR_REPOSITORY: garden-club-frontend
   # ECS service/cluster names follow a dev/prod convention; resolved per branch below.
   # dev:  garden-club-frontend-dev  on cluster garden-club-dev
