@@ -13,7 +13,6 @@
     "local:api": "cd backend && sam local start-api"
   },
   "workspaces": [
-    "frontend",
-    "backend"
+    "frontend"
   ]
 }

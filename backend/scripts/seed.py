@@ -22,7 +22,7 @@ SAMPLE_EVENTS = [
         "startTime": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
         "endTime": (datetime.now(timezone.utc) + timedelta(days=7, hours=3)).isoformat(),
         "headerImageKey": "",
-        "createdBy": "seed-script",
+        "createdBy": "david-script",
     },
     {
         "title": "Composting Workshop",

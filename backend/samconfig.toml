@@ -1,7 +1,5 @@
 version = 0.1
 
-[default.build.parameters]
-profile = "default"
 
 [default.local_start_api.parameters]
 docker_network      = "garden-club_localstack_default"
@@ -17,12 +15,17 @@ LocalstackEndpoint  = "http://garden-club-localstack:4566"
 stack_name          = "garden-club-dev"
 resolve_s3          = true
 region              = "us-east-1"
-capabilities        = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
-parameter_overrides = "Stage=dev CorsOrigin=https://dev.YOUR_DOMAIN.com"
-confirm_changeset   = false
+capabilities        = "CAPABILITY_IAM"
+parameter_overrides = "Stage=\"dev\" CorsOrigin=\"https://ga-859a7c3897d347359ade4c28bb71d9fa.ecs.us-east-1.on.aws/\" LocalstackEndpoint=\"\" S3PublicEndpoint=\"\""
+confirm_changeset   = true
 disable_rollback    = false
 
 # Deploy: sam deploy --config-env prod
+s3_prefix = "garden-club-dev"
+image_repositories = []
+
+[dev.global.parameters]
+region = "us-east-1"
 [prod.deploy.parameters]
 stack_name          = "garden-club-prod"
 resolve_s3          = true

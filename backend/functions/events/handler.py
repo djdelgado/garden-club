@@ -8,13 +8,13 @@ from aws_lambda_powertools import Logger
 from pydantic import BaseModel, ValidationError
 
 logger = Logger()
-dynamodb = boto3.resource(
-    "dynamodb",
-    endpoint_url=os.environ.get("LOCALSTACK_ENDPOINT"),
-    region_name=os.environ.get("AWS_REGION", "us-east-1"),
-    aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
-    aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
-)
+
+# Use LocalStack endpoint in local dev, AWS managed credentials in production
+dynamodb_kwargs = {"region_name": os.environ.get("AWS_REGION", "us-east-1")}
+if localstack_endpoint := os.environ.get("LOCALSTACK_ENDPOINT"):
+    dynamodb_kwargs["endpoint_url"] = localstack_endpoint
+
+dynamodb = boto3.resource("dynamodb", **dynamodb_kwargs)
 events_table = dynamodb.Table(os.environ.get("EVENTS_TABLE_NAME", "GardenClubEvents"))
 
 

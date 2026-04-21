@@ -41,7 +41,7 @@ jobs:
         run: sam build
 
       - name: SAM Deploy (dev)
-        run: sam deploy --config-env dev --no-confirm-changeset
+        run: sam deploy --config-env dev --no-confirm-changeset --no-fail-on-empty-changeset
 
   deploy-prod:
     name: Deploy to Prod
@@ -76,4 +76,4 @@ jobs:
         run: sam build
 
       - name: SAM Deploy (prod)
-        run: sam deploy --config-env prod --no-confirm-changeset
+        run: sam deploy --config-env prod --no-confirm-changeset --no-fail-on-empty-changeset

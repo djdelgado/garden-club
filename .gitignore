@@ -52,3 +52,4 @@ backend/env.json
 
 # Frontend build output (path-specific, in addition to root /.next/)
 frontend/.next/
+frontend/.next/
