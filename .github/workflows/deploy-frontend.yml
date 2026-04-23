@@ -41,7 +41,7 @@ jobs:
             echo "ecs_service=garden-club-frontend-prod" >> "$GITHUB_OUTPUT"
           else
             echo "env_label=dev"             >> "$GITHUB_OUTPUT"
-            echo "ecs_cluster=garden-club-dev"  >> "$GITHUB_OUTPUT"
+            echo "ecs_cluster=default"  >> "$GITHUB_OUTPUT"
             echo "ecs_service=garden-club-frontend-dev"  >> "$GITHUB_OUTPUT"
           fi
           echo "image_tag_full=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
