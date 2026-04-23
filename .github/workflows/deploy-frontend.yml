@@ -135,8 +135,8 @@ jobs:
           service-name: ${{ needs.resolve-env.outputs.ecs_service }}
           cluster: ${{ needs.resolve-env.outputs.ecs_cluster }}
           image: ${{ needs.build-and-push.outputs.image_uri }}
-                          execution-role-arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/garden-club-ecs-task-execution-${{needs.resolve-env.outputs.env_label}}
-                          infrastructure-role-arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/garden-club-ecs-task-execution-${{needs.resolve-env.outputs.env_label}}
+          execution-role-arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/garden-club-ecs-task-execution-${{needs.resolve-env.outputs.env_label}}
+          infrastructure-role-arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/garden-club-ecs-task-execution-${{needs.resolve-env.outputs.env_label}}
 
       - name: Post deploy summary
         run: |
