@@ -16,7 +16,7 @@ stack_name          = "garden-club-dev"
 resolve_s3          = true
 region              = "us-east-1"
 capabilities        = "CAPABILITY_IAM"
-parameter_overrides = "Stage=\"dev\" CorsOrigin=\"https://ga-859a7c3897d347359ade4c28bb71d9fa.ecs.us-east-1.on.aws/\" LocalstackEndpoint=\"\" S3PublicEndpoint=\"\""
+parameter_overrides = "Stage=\"dev\" CorsOrigin=\"https://ga-859a7c3897d347359ade4c28bb71d9fa.ecs.us-east-1.on.aws\" LocalstackEndpoint=\"\" S3PublicEndpoint=\"\""
 confirm_changeset   = true
 disable_rollback    = false
 
