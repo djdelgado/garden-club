@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "s3.localhost.localstack.cloud",
       },
+      {
+        protocol: "http",
+        hostname: "localhost",
+        port: "4566",
+      },
     ],
   },
 };

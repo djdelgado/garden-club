@@ -5,6 +5,7 @@ from typing import Any, Dict
 from uuid import uuid4
 
 import boto3
+from botocore.config import Config
 from aws_lambda_powertools import Logger
 
 logger = Logger()
@@ -14,7 +15,9 @@ aws_kwargs = {"region_name": os.environ.get("AWS_REGION", "us-east-1")}
 if localstack_endpoint := os.environ.get("LOCALSTACK_ENDPOINT"):
     aws_kwargs["endpoint_url"] = localstack_endpoint
 
-s3_client = boto3.client("s3", **aws_kwargs)
+# Disable flexible checksums for LocalStack compatibility (not supported by LocalStack)
+config = Config(s3={"payload_signing_enabled": False})
+s3_client = boto3.client("s3", config=config, **aws_kwargs)
 dynamodb = boto3.resource("dynamodb", **aws_kwargs)
 
 images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
@@ -57,9 +60,35 @@ def generate_presigned_url(bucket: str, key: str, expiration: int = 3600) -> str
     return url
 
 
+def complete_upload(image_ids: list) -> Dict[str, Any]:
+    """POST /upload/complete - Mark uploads as READY"""
+    try:
+        for image_id in image_ids:
+            images_table.update_item(
+                Key={"imageId": image_id},
+                UpdateExpression="SET #s = :val",
+                ExpressionAttributeNames={"#s": "status"},
+                ExpressionAttributeValues={":val": "READY"},
+            )
+        return format_response(200, {"updated": len(image_ids)})
+    except Exception as err:
+        logger.exception("Error completing uploads")
+        return format_response(500, {"error": str(err)})
+
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """POST /upload/presign - Generate presigned URLs for file uploads"""
-    logger.info(f"Received upload presign request: {event}")
+    """POST /upload/presign or POST /upload/complete"""
+    logger.info(f"Received upload request: {event}")
+
+    method = event.get("requestContext", {}).get("http", {}).get("method", "")
+    path = event.get("rawPath", "")
+
+    if method == "POST" and path.endswith("/upload/complete"):
+        try:
+            body = json.loads(event.get("body", "{}"))
+            return complete_upload(body.get("imageIds", []))
+        except json.JSONDecodeError:
+            return format_response(400, {"error": "Invalid JSON body"})
 
     try:
         body = json.loads(event.get("body", "{}"))
@@ -117,6 +146,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "uploadedAt": now,
                 "uploadedBy": user_id,
                 "isThumbnail": is_thumbnail,
+                "status": "PENDING",
             }
 
             images_table.put_item(Item=image_item)

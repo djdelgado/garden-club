@@ -7,6 +7,7 @@ import {
   Typography,
   Alert,
   Fab,
+  CircularProgress
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
@@ -32,6 +33,7 @@ export default function EventsPage() {
     try {
       setLoading(true);
       const data = await apiGet<Event[]>("/events");
+      console.log(data)
       setEvents(data);
     } catch (err) {
       setError("Failed to load events");
@@ -60,11 +62,21 @@ export default function EventsPage() {
         )}
 
         <Box sx={{ mt: 3 }}>
-          <EventList
-            events={events}
-            loading={loading}
-            onEventClick={handleEventClick}
-          />
+          {loading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+              <CircularProgress />
+            </Box>
+          ) : events.length == 0 ? (
+            <Typography variant="body1" color="text.secondary">
+              No events yet
+            </Typography>
+          ) :
+            (<EventList
+              events={events}
+              loading={loading}
+              onEventClick={handleEventClick}
+            />)
+          }
         </Box>
 
         {isAdmin && (

@@ -32,7 +32,7 @@ export function ImageGrid({ images }: ImageGridProps) {
             sx={{ cursor: "pointer" }}
           >
             <Image
-              src={`${IMAGES_BASE_URL}/${image.s3Key}`}
+              src={image.imageUrl ?? `${IMAGES_BASE_URL}/${image.s3Key}`}
               alt={image.fileName}
               width={300}
               height={300}

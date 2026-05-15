@@ -28,10 +28,10 @@ export default function AlbumDetailPage() {
     const loadImages = async () => {
       try {
         setLoading(true);
-        const data = await apiGet<GardenImage[]>(
+        const data = await apiGet<{ images: GardenImage[] }>(
           `/images?folderName=${encodeURIComponent(folderName)}`
         );
-        setImages(data);
+        setImages(data.images);
       } catch (err) {
         setError("Failed to load images");
         console.error(err);
@@ -43,11 +43,15 @@ export default function AlbumDetailPage() {
     loadImages();
   }, [folderName]);
 
+  const backClicked = () => {
+    return router.push("/gallery");
+  }
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-          <IconButton onClick={() => router.push("/gallery")} aria-label="back">
+          <IconButton onClick={backClicked} aria-label="back">
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h2">{folderName}</Typography>

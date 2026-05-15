@@ -23,7 +23,10 @@ images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
 def format_response(status_code: int, body: Any) -> Dict[str, Any]:
     return {
         "statusCode": status_code,
-        "headers": {"Content-Type": "application/json"},
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+        },
         "body": json.dumps(body, default=str),
     }
 
@@ -96,10 +99,20 @@ def get_images_by_folder(folder_name: str) -> Dict[str, Any]:
         response = images_table.query(
             IndexName="FolderNameIndex",
             KeyConditionExpression="folderName = :folder_name",
-            ExpressionAttributeValues={":folder_name": folder_name},
+            FilterExpression="#s = :status_val",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={":folder_name": folder_name, ":status_val": "READY"},
         )
         items = response.get("Items", [])
-        return format_response(200, items)
+        for item in items:
+            s3_key = item.get("s3Key")
+            if s3_key:
+                item["imageUrl"] = s3_client.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": images_bucket, "Key": s3_key},
+                    ExpiresIn=3600,
+                )
+        return format_response(200, {"images": items})
     except Exception as err:
         logger.exception(f"Error getting images for folder {folder_name}")
         return format_response(500, {"error": str(err)})

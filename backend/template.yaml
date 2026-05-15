@@ -255,6 +255,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt ImagesTable.Arn
 
   # Lambda Functions
@@ -337,6 +338,12 @@ Resources:
           Properties:
             ApiId: !Ref GardenClubApi
             Path: /upload/presign
+            Method: POST
+        CompleteUpload:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /upload/complete
             Method: POST
 
 Outputs:

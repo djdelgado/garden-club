@@ -76,7 +76,7 @@ export function CreateAlbumDialog({
 
     try {
       const presignRes = await apiPost<{
-        uploads: { uploadUrl: string; imageKey: string; fileName: string }[];
+        uploads: { uploadUrl: string; imageKey: string; fileName: string; imageId: string }[];
       }>("/upload/presign", {
         folderName: folderName.trim(),
         files: files.map((f) => ({ fileName: f.name })),
@@ -87,6 +87,10 @@ export function CreateAlbumDialog({
           fetch(upload.uploadUrl, { method: "PUT", body: files[idx] })
         )
       );
+
+      await apiPost("/upload/complete", {
+        imageIds: presignRes.uploads.map((u) => u.imageId),
+      });
 
       onAlbumCreated();
       handleClose();

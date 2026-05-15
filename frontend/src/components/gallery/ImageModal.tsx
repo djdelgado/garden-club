@@ -51,7 +51,7 @@ export function ImageModal({ image, onClose }: ImageModalProps) {
 
         <Box sx={{ p: 2 }}>
           <Image
-            src={`${IMAGES_BASE_URL}/${image.s3Key}`}
+            src={image.imageUrl ?? `${IMAGES_BASE_URL}/${image.s3Key}`}
             alt={image.fileName}
             width={1000}
             height={1000}
