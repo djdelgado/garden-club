@@ -39,9 +39,11 @@ export function CreateAlbumDialog({
 
   const addFiles = (newFiles: FileList | null) => {
     if (!newFiles) return;
+
     const imageFiles = Array.from(newFiles).filter((f) =>
       f.type.startsWith("image/")
     );
+
     setFiles((prev) => {
       const existingNames = new Set(prev.map((f) => f.name));
       return [...prev, ...imageFiles.filter((f) => !existingNames.has(f.name))];
