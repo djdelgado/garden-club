@@ -84,7 +84,11 @@ export function CreateAlbumDialog({
 
       await Promise.all(
         presignRes.uploads.map((upload, idx) =>
-          fetch(upload.uploadUrl, { method: "PUT", body: files[idx] })
+          fetch(upload.uploadUrl, {
+            method: "PUT",
+            body: files[idx],
+            headers: { "Content-Type": files[idx].type },
+          })
         )
       );
 
