@@ -59,7 +59,6 @@ export function CreateEventModal({
       await fetch(uploadUrl, {
         method: "PUT",
         body: file,
-        headers: { "Content-Type": file.type },
       });
       setBannerKey(imageKey);
     } catch {

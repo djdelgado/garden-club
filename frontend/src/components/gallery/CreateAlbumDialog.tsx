@@ -89,7 +89,6 @@ export function CreateAlbumDialog({
           fetch(upload.uploadUrl, {
             method: "PUT",
             body: files[idx],
-            headers: { "Content-Type": files[idx].type },
           })
         )
       );
