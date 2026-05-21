@@ -60,7 +60,7 @@ export default function GalleryPage() {
           <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
             <CircularProgress />
           </Box>
-        ) : folders.length === 0 ? (
+        ) : folders?.length === 0 ? (
           <Box sx={{ textAlign: "center", py: 8 }}>
             <Typography variant="body1" color="text.secondary">
               No albums yet
@@ -72,6 +72,7 @@ export default function GalleryPage() {
               <Grid2 size={{ xs: 12, sm: 6, md: 4 }} key={folder.folderName}>
                 <AlbumCard
                   folder={folder}
+                  onRefresh={loadFolders}
                   onClick={() =>
                     router.push(
                       `/gallery/${encodeURIComponent(folder.folderName)}`

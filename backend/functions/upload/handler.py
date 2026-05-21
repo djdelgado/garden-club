@@ -8,6 +8,8 @@ import boto3
 from botocore.config import Config
 from aws_lambda_powertools import Logger
 
+from db_types import ImageItem, PresignedUploadResult
+
 logger = Logger()
 
 # Use LocalStack endpoint in local dev, AWS managed credentials in production
@@ -138,7 +140,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             upload_url = generate_presigned_url(images_bucket, s3_key)
 
             # Store image metadata in DynamoDB
-            image_item = {
+            image_item: ImageItem = {
                 "imageId": image_id,
                 "folderName": folder_name,
                 "s3Key": s3_key,
@@ -151,13 +153,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             images_table.put_item(Item=image_item)
 
-            upload_results.append({
+            result: PresignedUploadResult = {
                 "fileName": file_name,
                 "imageId": image_id,
                 "uploadUrl": upload_url,
                 "imageKey": s3_key,
                 "isThumbnail": is_thumbnail,
-            })
+            }
+            upload_results.append(result)
 
         return format_response(
             200,

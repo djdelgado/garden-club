@@ -10,7 +10,7 @@
     "lint": "cd frontend && npm run lint",
     "local:up": "docker-compose up -d localstack && sleep 5 && bash scripts/setup-local.sh",
     "local:down": "docker-compose down",
-    "local:api": "cd backend && sam local start-api"
+    "local:api": "cd backend && sam build && sam local start-api"
   },
   "workspaces": [
     "frontend"

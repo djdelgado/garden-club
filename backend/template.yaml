@@ -318,6 +318,18 @@ Resources:
             ApiId: !Ref GardenClubApi
             Path: /images/folders
             Method: GET
+        UpdateFolder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /images/folders/{folderName}
+            Method: PUT
+        DeleteFolder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /images/folders/{folderName}
+            Method: DELETE
         DeleteImage:
           Type: HttpApi
           Properties:

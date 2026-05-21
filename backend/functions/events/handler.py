@@ -7,6 +7,8 @@ import boto3
 from aws_lambda_powertools import Logger
 from pydantic import BaseModel, ValidationError
 
+from db_types import EventItem
+
 logger = Logger()
 
 # Use LocalStack endpoint in local dev, AWS managed credentials in production
@@ -81,7 +83,7 @@ def create_event(body: str, user_id: str) -> Dict[str, Any]:
         event_data = Event(**data)
         now = datetime.utcnow().isoformat()
 
-        item = {
+        item: EventItem = {
             **event_data.model_dump(),
             "createdAt": now,
             "createdBy": user_id,
