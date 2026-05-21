@@ -112,7 +112,7 @@ export function CreateAlbumDialog({
         uploads: { uploadUrl: string; imageKey: string; fileName: string; imageId: string }[];
       }>("/upload/presign", {
         folderName: folderName.trim(),
-        files: files.map((f) => ({ fileName: f.name })),
+        files: files.map((f) => ({ fileName: f.name, contentType: f.type })),
       });
 
       await Promise.all(
@@ -120,6 +120,7 @@ export function CreateAlbumDialog({
           fetch(upload.uploadUrl, {
             method: "PUT",
             body: files[idx],
+            headers: { "Content-Type": files[idx].type },
           })
         )
       );
