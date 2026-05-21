@@ -256,7 +256,10 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
-                Resource: !GetAtt ImagesTable.Arn
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt ImagesTable.Arn
+                  - !Sub '${ImagesTable.Arn}/index/*'
 
   # Lambda Functions
   EventsFunction:
