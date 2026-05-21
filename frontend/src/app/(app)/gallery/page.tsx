@@ -98,7 +98,7 @@ export default function GalleryPage() {
             <CreateAlbumDialog
               open={openDialog}
               onClose={() => setOpenDialog(false)}
-              onAlbumCreated={() => {
+              onAlbumChanged={() => {
                 setOpenDialog(false);
                 loadFolders();
               }}
