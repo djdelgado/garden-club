@@ -56,7 +56,10 @@ export function CreateEventModal({
         files: [{ fileName: file.name }],
       });
       const { uploadUrl, imageKey } = presignRes.uploads[0];
-      await fetch(uploadUrl, { method: "PUT", body: file });
+      await fetch(uploadUrl, {
+        method: "PUT",
+        body: file,
+      });
       setBannerKey(imageKey);
     } catch {
       setError("Failed to upload banner image");

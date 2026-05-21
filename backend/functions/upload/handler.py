@@ -51,6 +51,7 @@ def generate_presigned_url(bucket: str, key: str, expiration: int = 3600) -> str
         "put_object",
         Params={"Bucket": bucket, "Key": key},
         ExpiresIn=expiration,
+        HttpMethod="PUT",
     )
     # Replace internal endpoint with public endpoint if configured
     # In production: S3_PUBLIC_ENDPOINT won't be set, URL will use real AWS domain
@@ -136,8 +137,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Only mark first image as thumbnail if folder is empty
             is_thumbnail = (idx == 0 and not folder_has_images)
 
-            # Generate presigned URL
-            upload_url = generate_presigned_url(images_bucket, s3_key)
+            # Generate presigned URL with short expiration (STS token expires after ~1h)
+            upload_url = generate_presigned_url(images_bucket, s3_key, expiration=60)
 
             # Store image metadata in DynamoDB
             image_item: ImageItem = {

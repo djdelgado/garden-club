@@ -51,9 +51,11 @@ export function CreateAlbumDialog({
 
   const addFiles = (newFiles: FileList | null) => {
     if (!newFiles) return;
+
     const imageFiles = Array.from(newFiles).filter((f) =>
       f.type.startsWith("image/")
     );
+
     setFiles((prev) => {
       const existingNames = new Set(prev.map((f) => f.name));
       return [...prev, ...imageFiles.filter((f) => !existingNames.has(f.name))];
@@ -115,7 +117,10 @@ export function CreateAlbumDialog({
 
       await Promise.all(
         presignRes.uploads.map((upload, idx) =>
-          fetch(upload.uploadUrl, { method: "PUT", body: files[idx] })
+          fetch(upload.uploadUrl, {
+            method: "PUT",
+            body: files[idx],
+          })
         )
       );
 
