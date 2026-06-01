@@ -17,7 +17,7 @@ import {
   ListItemText,
 } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import { apiPost, apiPut } from "@/lib/api";
+import { ImageService } from "@/services/imageService";
 import { DeleteAlbumBtn } from "./DeleteAlbumBtn";
 
 interface CreateAlbumDialogProps {
@@ -85,17 +85,14 @@ export function CreateAlbumDialog({
         setError("Album name is unchanged");
         return;
       }
-      await apiPut(`/images/folders/${folderData?.folderName}`, {
-        folderName: folderData?.folderName,
-        newFolderName: folderName.trim(),
-      })
-        .then(() => {
-          onAlbumChanged();
-          handleClose();
-        })
-        .catch(() => {
-          setError("Failed to update album. Please try again.");
-        });
+      try {
+        await ImageService.updateFolder(folderData?.folderName ?? "", folderName.trim());
+        await uploadImages();
+        onAlbumChanged();
+        handleClose();
+      } catch {
+        setError("Failed to update album. Please try again.");
+      }
       return;
     }
 
@@ -108,27 +105,7 @@ export function CreateAlbumDialog({
     setError(null);
 
     try {
-      const presignRes = await apiPost<{
-        uploads: { uploadUrl: string; imageKey: string; fileName: string; imageId: string }[];
-      }>("/upload/presign", {
-        folderName: folderName.trim(),
-        files: files.map((f) => ({ fileName: f.name, contentType: f.type })),
-      });
-
-      await Promise.all(
-        presignRes.uploads.map((upload, idx) =>
-          fetch(upload.uploadUrl, {
-            method: "PUT",
-            body: files[idx],
-            headers: { "Content-Type": files[idx].type },
-          })
-        )
-      );
-
-      await apiPost("/upload/complete", {
-        imageIds: presignRes.uploads.map((u) => u.imageId),
-      });
-
+      await uploadImages();
       onAlbumChanged();
       handleClose();
     } catch {
@@ -137,6 +114,21 @@ export function CreateAlbumDialog({
       setUploading(false);
     }
   };
+
+  const uploadImages = async() => {
+    const uploads = await ImageService.presignUpload(
+      folderName.trim(),
+      files.map((f) => ({ fileName: f.name, contentType: f.type }))
+    );
+
+    await Promise.all(
+      uploads.map((upload, idx) =>
+        ImageService.uploadToS3(upload.uploadUrl, files[idx], files[idx].type)
+      )
+    );
+
+    await ImageService.completeUpload(uploads.map((u) => u.imageId));
+  }
 
   const handleClose = () => {
     setFolderName("");

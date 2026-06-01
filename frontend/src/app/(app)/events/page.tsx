@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { apiGet } from "@/lib/api";
+import { EventService } from "@/services/eventService";
 import { Event } from "@/types/event";
 import { EventList } from "@/components/events/EventList";
 import { CreateEventModal } from "@/components/events/CreateEventModal";
@@ -32,7 +32,7 @@ export default function EventsPage() {
   const loadEvents = async () => {
     try {
       setLoading(true);
-      const data = await apiGet<Event[]>("/events");
+      const data = await EventService.getEvents();
       console.log(data)
       setEvents(data);
     } catch (err) {

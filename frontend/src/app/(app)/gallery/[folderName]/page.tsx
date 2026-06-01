@@ -11,9 +11,9 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useParams, useRouter } from "next/navigation";
-import { apiGet } from "@/lib/api";
 import { GardenImage } from "@/types/image";
 import { ImageGrid } from "@/components/gallery/ImageGrid";
+import { ImageService } from "@/services/imageService";
 
 export default function AlbumDetailPage() {
   const params = useParams();
@@ -28,10 +28,8 @@ export default function AlbumDetailPage() {
     const loadImages = async () => {
       try {
         setLoading(true);
-        const data = await apiGet<{ images: GardenImage[] }>(
-          `/images?folderName=${encodeURIComponent(folderName)}`
-        );
-        setImages(data.images);
+        const images = await ImageService.getImagesbyFolderName(folderName);
+        setImages(images);
       } catch (err) {
         setError("Failed to load images");
         console.error(err);

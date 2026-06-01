@@ -13,10 +13,10 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import { useRouter } from "next/navigation";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { apiGet } from "@/lib/api";
 import { ImageFolder } from "@/types/gallery";
 import { AlbumCard } from "@/components/gallery/AlbumCard";
 import { CreateAlbumDialog } from "@/components/gallery/CreateAlbumDialog";
+import { ImageService } from "@/services/imageService";
 
 export default function GalleryPage() {
   const router = useRouter();
@@ -33,8 +33,8 @@ export default function GalleryPage() {
   const loadFolders = async () => {
     try {
       setLoading(true);
-      const data = await apiGet<{ folders: ImageFolder[] }>("/images/folders");
-      setFolders(data.folders);
+      const folders = await ImageService.getImageFolders();
+      setFolders(folders);
     } catch (err) {
       setError("Failed to load albums");
       console.error(err);
