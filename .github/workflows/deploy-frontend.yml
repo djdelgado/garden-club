@@ -146,17 +146,22 @@ jobs:
           IMAGE_TAG:         ${{ needs.resolve-env.outputs.image_tag_full }}
           LIGHTSAIL_SERVICE: ${{ needs.resolve-env.outputs.lightsail_service }}
         run: |
-          # Push to Lightsail's internal registry. Output contains a line like:
+          # Push to Lightsail's internal registry. Stream output live (for error
+          # visibility) and save to a file for parsing the resulting image digest.
+          # Output contains a line like:
           # Refer to this image as ":garden-club-frontend-dev.frontend.N" in deployments.
-          PUSH_OUTPUT=$(aws lightsail push-container-image \
+          aws lightsail push-container-image \
             --service-name "${LIGHTSAIL_SERVICE}" \
             --label frontend \
-            --image "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" 2>&1)
+            --image "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" \
+            2>&1 | tee /tmp/ls_push_output.txt
 
-          echo "$PUSH_OUTPUT"
+          LIGHTSAIL_IMAGE=$(grep -oP '(?<=Refer to this image as ")[^"]+' /tmp/ls_push_output.txt)
 
-          LIGHTSAIL_IMAGE=$(echo "$PUSH_OUTPUT" \
-            | grep -oP '(?<=Refer to this image as ")[^"]+')
+          if [[ -z "${LIGHTSAIL_IMAGE}" ]]; then
+            echo "ERROR: could not parse Lightsail image digest from push output."
+            exit 1
+          fi
 
           echo "Lightsail image: ${LIGHTSAIL_IMAGE}"
 
