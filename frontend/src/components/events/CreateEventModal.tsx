@@ -17,7 +17,8 @@ import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import { apiPost } from "@/lib/api";
+import { ImageService } from "@/services/imageService";
+import { EventService } from "@/services/eventService";
 import { v4 as uuidv4 } from "uuid";
 
 interface CreateEventModalProps {
@@ -49,14 +50,9 @@ export function CreateEventModal({
     setBannerUploading(true);
     setError(null);
     try {
-      const presignRes = await apiPost<{
-        uploads: { uploadUrl: string; imageKey: string }[];
-      }>("/upload/presign", {
-        folderName: "event-banners",
-        files: [{ fileName: file.name }],
-      });
-      const { uploadUrl, imageKey } = presignRes.uploads[0];
-      await fetch(uploadUrl, { method: "PUT", body: file });
+      const uploads = await ImageService.presignUpload("event-banners", [{ fileName: file.name }]);
+      const { uploadUrl, imageKey } = uploads[0];
+      await ImageService.uploadToS3(uploadUrl, file);
       setBannerKey(imageKey);
     } catch {
       setError("Failed to upload banner image");
@@ -88,7 +84,7 @@ export function CreateEventModal({
         newEvent.headerImageKey = bannerKey;
       }
 
-      await apiPost("/events", newEvent);
+      await EventService.createEvent(newEvent);
       onEventCreated();
       handleClose();
     } catch (err) {

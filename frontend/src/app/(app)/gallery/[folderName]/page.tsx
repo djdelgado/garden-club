@@ -11,9 +11,9 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useParams, useRouter } from "next/navigation";
-import { apiGet } from "@/lib/api";
 import { GardenImage } from "@/types/image";
 import { ImageGrid } from "@/components/gallery/ImageGrid";
+import { ImageService } from "@/services/imageService";
 
 export default function AlbumDetailPage() {
   const params = useParams();
@@ -28,10 +28,8 @@ export default function AlbumDetailPage() {
     const loadImages = async () => {
       try {
         setLoading(true);
-        const data = await apiGet<GardenImage[]>(
-          `/images?folderName=${encodeURIComponent(folderName)}`
-        );
-        setImages(data);
+        const images = await ImageService.getImagesbyFolderName(folderName);
+        setImages(images);
       } catch (err) {
         setError("Failed to load images");
         console.error(err);
@@ -43,11 +41,15 @@ export default function AlbumDetailPage() {
     loadImages();
   }, [folderName]);
 
+  const backClicked = () => {
+    return router.push("/gallery");
+  }
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-          <IconButton onClick={() => router.push("/gallery")} aria-label="back">
+          <IconButton onClick={backClicked} aria-label="back">
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h2">{folderName}</Typography>

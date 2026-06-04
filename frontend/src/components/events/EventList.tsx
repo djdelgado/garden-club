@@ -25,7 +25,7 @@ export function EventList({
 
   return (
     <Grid container spacing={3}>
-      {events.map((event) => (
+      {events && events.map((event) => (
         <Grid item xs={12} key={event.eventId}>
           <EventCard
             event={event}

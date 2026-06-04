@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, DragEvent } from "react";
+import { useState, useRef, DragEvent, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -17,18 +17,23 @@ import {
   ListItemText,
 } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import { apiPost } from "@/lib/api";
+import { ImageService } from "@/services/imageService";
+import { DeleteAlbumBtn } from "./DeleteAlbumBtn";
 
 interface CreateAlbumDialogProps {
   open: boolean;
+  isEdit?: boolean;
+  folderData?: { folderName: string };
   onClose: () => void;
-  onAlbumCreated: () => void;
+  onAlbumChanged: () => void;
 }
 
 export function CreateAlbumDialog({
-  open,
+  open = false,
+  isEdit = false,
+  folderData,
   onClose,
-  onAlbumCreated,
+  onAlbumChanged,
 }: CreateAlbumDialogProps) {
   const [folderName, setFolderName] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -37,11 +42,20 @@ export function CreateAlbumDialog({
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (open && folderData) {
+      setFolderName(folderData.folderName);
+    }
+  }, [open, folderData]);
+
+
   const addFiles = (newFiles: FileList | null) => {
     if (!newFiles) return;
+
     const imageFiles = Array.from(newFiles).filter((f) =>
       f.type.startsWith("image/")
     );
+
     setFiles((prev) => {
       const existingNames = new Set(prev.map((f) => f.name));
       return [...prev, ...imageFiles.filter((f) => !existingNames.has(f.name))];
@@ -66,6 +80,22 @@ export function CreateAlbumDialog({
       setError("Please enter an album name");
       return;
     }
+    if (isEdit) {
+      if (folderName.trim() === folderData?.folderName) {
+        setError("Album name is unchanged");
+        return;
+      }
+      try {
+        await ImageService.updateFolder(folderData?.folderName ?? "", folderName.trim());
+        await uploadImages();
+        onAlbumChanged();
+        handleClose();
+      } catch {
+        setError("Failed to update album. Please try again.");
+      }
+      return;
+    }
+
     if (files.length === 0) {
       setError("Please add at least one image");
       return;
@@ -75,20 +105,8 @@ export function CreateAlbumDialog({
     setError(null);
 
     try {
-      const presignRes = await apiPost<{
-        uploads: { uploadUrl: string; imageKey: string; fileName: string }[];
-      }>("/upload/presign", {
-        folderName: folderName.trim(),
-        files: files.map((f) => ({ fileName: f.name })),
-      });
-
-      await Promise.all(
-        presignRes.uploads.map((upload, idx) =>
-          fetch(upload.uploadUrl, { method: "PUT", body: files[idx] })
-        )
-      );
-
-      onAlbumCreated();
+      await uploadImages();
+      onAlbumChanged();
       handleClose();
     } catch {
       setError("Failed to create album. Please try again.");
@@ -96,6 +114,21 @@ export function CreateAlbumDialog({
       setUploading(false);
     }
   };
+
+  const uploadImages = async() => {
+    const uploads = await ImageService.presignUpload(
+      folderName.trim(),
+      files.map((f) => ({ fileName: f.name, contentType: f.type }))
+    );
+
+    await Promise.all(
+      uploads.map((upload, idx) =>
+        ImageService.uploadToS3(upload.uploadUrl, files[idx], files[idx].type)
+      )
+    );
+
+    await ImageService.completeUpload(uploads.map((u) => u.imageId));
+  }
 
   const handleClose = () => {
     setFolderName("");
@@ -106,7 +139,7 @@ export function CreateAlbumDialog({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>New Album</DialogTitle>
+      <DialogTitle>{isEdit ? "Edit Album" : "New Album"}</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2 }}>
           {error && <Alert severity="error">{error}</Alert>}
@@ -170,6 +203,7 @@ export function CreateAlbumDialog({
         </Box>
       </DialogContent>
       <DialogActions>
+        {isEdit && <DeleteAlbumBtn folderName={folderData?.folderName || ""} onDeleted={() => onAlbumChanged()}/>}
         <Button onClick={handleClose} disabled={uploading}>
           Cancel
         </Button>
@@ -179,7 +213,7 @@ export function CreateAlbumDialog({
           disabled={uploading}
           startIcon={uploading ? <CircularProgress size={20} /> : undefined}
         >
-          {uploading ? "Creating..." : "Create Album"}
+          {isEdit ? "Update" : "Create Album"}
         </Button>
       </DialogActions>
     </Dialog>

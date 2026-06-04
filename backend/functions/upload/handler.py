@@ -5,7 +5,10 @@ from typing import Any, Dict
 from uuid import uuid4
 
 import boto3
+from botocore.config import Config
 from aws_lambda_powertools import Logger
+
+from db_types import ImageItem, PresignedUploadResult
 
 logger = Logger()
 
@@ -14,7 +17,9 @@ aws_kwargs = {"region_name": os.environ.get("AWS_REGION", "us-east-1")}
 if localstack_endpoint := os.environ.get("LOCALSTACK_ENDPOINT"):
     aws_kwargs["endpoint_url"] = localstack_endpoint
 
-s3_client = boto3.client("s3", **aws_kwargs)
+# Disable flexible checksums for LocalStack compatibility (not supported by LocalStack)
+config = Config(s3={"payload_signing_enabled": False})
+s3_client = boto3.client("s3", config=config, **aws_kwargs)
 dynamodb = boto3.resource("dynamodb", **aws_kwargs)
 
 images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
@@ -40,12 +45,14 @@ def get_user_id(event: Dict[str, Any]) -> str:
         return "unknown"
 
 
-def generate_presigned_url(bucket: str, key: str, expiration: int = 3600) -> str:
+def generate_presigned_url(bucket: str, key: str, content_type: str,expiration: int = 3600) -> str:
     """Generate presigned S3 PUT URL"""
     url = s3_client.generate_presigned_url(
         "put_object",
-        Params={"Bucket": bucket, "Key": key},
+        Params={"Bucket": bucket, "Key": key, "ContentType": content_type},
         ExpiresIn=expiration,
+        HttpMethod="PUT",
+        
     )
     # Replace internal endpoint with public endpoint if configured
     # In production: S3_PUBLIC_ENDPOINT won't be set, URL will use real AWS domain
@@ -57,9 +64,35 @@ def generate_presigned_url(bucket: str, key: str, expiration: int = 3600) -> str
     return url
 
 
+def complete_upload(image_ids: list) -> Dict[str, Any]:
+    """POST /upload/complete - Mark uploads as READY"""
+    try:
+        for image_id in image_ids:
+            images_table.update_item(
+                Key={"imageId": image_id},
+                UpdateExpression="SET #s = :val",
+                ExpressionAttributeNames={"#s": "status"},
+                ExpressionAttributeValues={":val": "READY"},
+            )
+        return format_response(200, {"updated": len(image_ids)})
+    except Exception as err:
+        logger.exception("Error completing uploads")
+        return format_response(500, {"error": str(err)})
+
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """POST /upload/presign - Generate presigned URLs for file uploads"""
-    logger.info(f"Received upload presign request: {event}")
+    """POST /upload/presign or POST /upload/complete"""
+    logger.info(f"Received upload request: {event}")
+
+    method = event.get("requestContext", {}).get("http", {}).get("method", "")
+    path = event.get("rawPath", "")
+
+    if method == "POST" and path.endswith("/upload/complete"):
+        try:
+            body = json.loads(event.get("body", "{}"))
+            return complete_upload(body.get("imageIds", []))
+        except json.JSONDecodeError:
+            return format_response(400, {"error": "Invalid JSON body"})
 
     try:
         body = json.loads(event.get("body", "{}"))
@@ -94,6 +127,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         for idx, file_obj in enumerate(files):
             file_name = file_obj.get("fileName")
+            content_type = file_obj.get("contentType")
 
             if not file_name:
                 continue
@@ -105,11 +139,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Only mark first image as thumbnail if folder is empty
             is_thumbnail = (idx == 0 and not folder_has_images)
 
-            # Generate presigned URL
-            upload_url = generate_presigned_url(images_bucket, s3_key)
+            # Generate presigned URL with short expiration (STS token expires after ~1h)
+            upload_url = generate_presigned_url(images_bucket, s3_key, content_type, expiration=60)
 
             # Store image metadata in DynamoDB
-            image_item = {
+            image_item: ImageItem = {
                 "imageId": image_id,
                 "folderName": folder_name,
                 "s3Key": s3_key,
@@ -117,17 +151,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "uploadedAt": now,
                 "uploadedBy": user_id,
                 "isThumbnail": is_thumbnail,
+                "status": "PENDING",
             }
 
             images_table.put_item(Item=image_item)
 
-            upload_results.append({
+            result: PresignedUploadResult = {
                 "fileName": file_name,
                 "imageId": image_id,
                 "uploadUrl": upload_url,
                 "imageKey": s3_key,
                 "isThumbnail": is_thumbnail,
-            })
+            }
+            upload_results.append(result)
 
         return format_response(
             200,

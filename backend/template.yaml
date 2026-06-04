@@ -255,7 +255,11 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
-                Resource: !GetAtt ImagesTable.Arn
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt ImagesTable.Arn
+                  - !Sub '${ImagesTable.Arn}/index/*'
 
   # Lambda Functions
   EventsFunction:
@@ -317,6 +321,18 @@ Resources:
             ApiId: !Ref GardenClubApi
             Path: /images/folders
             Method: GET
+        UpdateFolder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /images/folders/{folderName}
+            Method: PUT
+        DeleteFolder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /images/folders/{folderName}
+            Method: DELETE
         DeleteImage:
           Type: HttpApi
           Properties:
@@ -337,6 +353,12 @@ Resources:
           Properties:
             ApiId: !Ref GardenClubApi
             Path: /upload/presign
+            Method: POST
+        CompleteUpload:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /upload/complete
             Method: POST
 
 Outputs:

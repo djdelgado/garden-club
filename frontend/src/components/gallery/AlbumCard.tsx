@@ -1,16 +1,31 @@
 "use client";
 
-import { Card, CardContent, CardMedia, Typography, Box } from "@mui/material";
+import { Card, CardContent, CardMedia, Typography, Box, CardActionArea, CardActions, Button, IconButton } from "@mui/material";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
+import EditIcon from '@mui/icons-material/Edit';
 import { ImageFolder } from "@/types/gallery";
+import { useState } from "react";
+import { CreateAlbumDialog } from "./CreateAlbumDialog";
+import { DeleteAlbumBtn } from "./DeleteAlbumBtn";
 
 interface AlbumCardProps {
   folder: ImageFolder;
   onClick: () => void;
+  onRefresh: () => void;
 }
 
-export function AlbumCard({ folder, onClick }: AlbumCardProps) {
+export function AlbumCard({ folder, onClick, onRefresh }: AlbumCardProps) {
+  const [openDialog, setOpenDialog] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+
+  const editClicked = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEdit(true);
+    setOpenDialog(true);
+  };
+
   return (
+    <>
     <Card
       onClick={onClick}
       sx={{
@@ -18,6 +33,7 @@ export function AlbumCard({ folder, onClick }: AlbumCardProps) {
         "&:hover": { boxShadow: 4 },
       }}
     >
+      <CardActionArea>
       {folder.thumbnailUrl ? (
         <CardMedia
           component="img"
@@ -47,6 +63,22 @@ export function AlbumCard({ folder, onClick }: AlbumCardProps) {
           {folder.imageCount} {folder.imageCount === 1 ? "photo" : "photos"}
         </Typography>
       </CardContent>
+      </CardActionArea>
+      <CardActions>
+        <IconButton aria-label="delete" size="small" onClick={editClicked}>
+          <EditIcon fontSize="inherit" />
+        </IconButton>
+      </CardActions>
     </Card>
+    { openDialog && (
+      <CreateAlbumDialog
+        open={openDialog}
+        isEdit={isEdit}
+        folderData={{ folderName: folder.folderName }}
+        onClose={() => setOpenDialog(false)}
+        onAlbumChanged={() => { setOpenDialog(false); onRefresh(); }}
+      />
+    )}
+    </>
   );
 }

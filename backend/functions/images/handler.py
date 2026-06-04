@@ -6,6 +6,8 @@ from urllib.parse import parse_qs
 import boto3
 from aws_lambda_powertools import Logger
 
+from db_types import ImageItem, FolderMetadata
+
 logger = Logger()
 
 # Use LocalStack endpoint in local dev, AWS managed credentials in production
@@ -23,7 +25,10 @@ images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
 def format_response(status_code: int, body: Any) -> Dict[str, Any]:
     return {
         "statusCode": status_code,
-        "headers": {"Content-Type": "application/json"},
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+        },
         "body": json.dumps(body, default=str),
     }
 
@@ -44,24 +49,24 @@ def get_all_folders() -> Dict[str, Any]:
     try:
         # Scan DynamoDB to get all images
         response = images_table.scan()
-        items = response.get("Items", [])
+        items: list[ImageItem] = response.get("Items", [])
 
         # Group by folder and extract thumbnail info
-        folders_dict = {}
+        folders_dict: Dict[str, FolderMetadata] = {}
         for item in items:
             folder_name = item.get("folderName")
             if folder_name:
                 if folder_name not in folders_dict:
-                    folders_dict[folder_name] = {
+                    folder_meta: FolderMetadata = {
                         "folderName": folder_name,
-                        "thumbnailUrl": None,
                         "imageCount": 0,
                     }
+                    folders_dict[folder_name] = folder_meta
 
                 folders_dict[folder_name]["imageCount"] += 1
 
                 # Use first image marked as thumbnail
-                if item.get("isThumbnail") and not folders_dict[folder_name]["thumbnailUrl"]:
+                if item.get("isThumbnail") and "thumbnailUrl" not in folders_dict[folder_name]:
                     s3_key = item.get("s3Key")
                     if s3_key:
                         # Generate presigned URL for thumbnail (valid for 1 hour)
@@ -83,7 +88,7 @@ def get_images() -> Dict[str, Any]:
     """GET /images - Get all images (for testing)"""
     try:
         response = images_table.scan()
-        items = response.get("Items", [])
+        items: list[ImageItem] = response.get("Items", [])
         return format_response(200, items)
     except Exception as err:
         logger.exception("Error getting images")
@@ -96,10 +101,20 @@ def get_images_by_folder(folder_name: str) -> Dict[str, Any]:
         response = images_table.query(
             IndexName="FolderNameIndex",
             KeyConditionExpression="folderName = :folder_name",
-            ExpressionAttributeValues={":folder_name": folder_name},
+            FilterExpression="#s = :status_val",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={":folder_name": folder_name, ":status_val": "READY"},
         )
-        items = response.get("Items", [])
-        return format_response(200, items)
+        items: list[ImageItem] = response.get("Items", [])
+        for item in items:
+            s3_key = item.get("s3Key")
+            if s3_key:
+                item["imageUrl"] = s3_client.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": images_bucket, "Key": s3_key},
+                    ExpiresIn=3600,
+                )
+        return format_response(200, {"images": items})
     except Exception as err:
         logger.exception(f"Error getting images for folder {folder_name}")
         return format_response(500, {"error": str(err)})
@@ -113,7 +128,7 @@ def delete_image(image_id: str) -> Dict[str, Any]:
         if "Item" not in response:
             return format_response(404, {"error": "Image not found"})
 
-        item = response["Item"]
+        item: ImageItem = response["Item"]
         s3_key = item.get("s3Key")
         folder_name = item.get("folderName")
         is_thumbnail = item.get("isThumbnail", False)
@@ -132,7 +147,7 @@ def delete_image(image_id: str) -> Dict[str, Any]:
                 Limit=1,
             )
             if remaining.get("Items"):
-                next_image = remaining["Items"][0]
+                next_image: ImageItem = remaining["Items"][0]
                 images_table.update_item(
                     Key={"imageId": next_image["imageId"]},
                     UpdateExpression="SET isThumbnail = :val",
@@ -145,6 +160,59 @@ def delete_image(image_id: str) -> Dict[str, Any]:
         logger.exception(f"Error deleting image {image_id}")
         return format_response(500, {"error": str(err)})
 
+def update_folder_name(folder_name: str, new_folder_name: str) -> Dict[str, Any]:
+    """PUT /images/folders/{folderName} - Rename a folder across all its images"""
+    try:
+        response = images_table.query(
+            IndexName="FolderNameIndex",
+            KeyConditionExpression="folderName = :folder_name",
+            ExpressionAttributeValues={":folder_name": folder_name},
+        )
+        items: list[ImageItem] = response.get("Items", [])
+
+        if not items:
+            return format_response(404, {"error": "Folder not found"})
+
+        for item in items:
+            images_table.put_item(
+                Item={
+                    **item,
+                    "folderName": new_folder_name
+                }
+            )
+
+        return format_response(200, {"updated": len(items), "folderName": new_folder_name})
+
+    except Exception as err:
+        logger.exception(f"Error renaming folder {folder_name}")
+        return format_response(500, {"error": str(err)})
+
+
+def delete_folder(folder_name: str) -> Dict[str, Any]:
+    """DELETE /images/folders/{folderName} - Delete folder and all images"""
+    try:
+        response = images_table.query(
+            IndexName="FolderNameIndex",
+            KeyConditionExpression="folderName = :folder_name",
+            ExpressionAttributeValues={":folder_name": folder_name},
+        )
+        items: list[ImageItem] = response.get("Items", [])
+
+        if not items:
+            return format_response(404, {"error": "Folder not found"})
+
+        for item in items:
+            image_id = item["imageId"]
+            s3_key = item.get("s3Key")
+            if s3_key:
+                s3_client.delete_object(Bucket=images_bucket, Key=s3_key)
+            images_table.delete_item(Key={"imageId": image_id})
+
+        return format_response(204, {})
+
+    except Exception as err:
+        logger.exception(f"Error deleting folder {folder_name}")
+        return format_response(500, {"error": str(err)})
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Main Lambda handler for images"""
@@ -166,11 +234,21 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 return get_images()  # Return all images if no folderName provided
 
             return get_images_by_folder(folder_name)
+        elif method == "DELETE" and "/folders/" in path:
+            folder_name = path.split("/folders/")[-1]
+            return delete_folder(folder_name)
 
         elif method == "DELETE":
             image_id = path.split("/")[-1]
             return delete_image(image_id)
 
+        elif method == "PUT" and "/folders/" in path:
+            folder_name = path.split("/folders/")[-1]
+            body = json.loads(event.get("body", "{}"))
+            new_folder_name = body.get("newFolderName", "").strip()
+            if not new_folder_name:
+                return format_response(400, {"error": "Missing required field: newFolderName"})
+            return update_folder_name(folder_name, new_folder_name)
         else:
             return format_response(405, {"error": "Method not allowed"})
 

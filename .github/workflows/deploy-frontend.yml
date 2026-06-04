@@ -16,9 +16,9 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: garden-club-frontend
-  # ECS service/cluster names follow a dev/prod convention; resolved per branch below.
-  # dev:  garden-club-frontend-dev  on cluster garden-club-dev
-  # prod: garden-club-frontend-prod on cluster garden-club-prod
+  # Lightsail service names follow a dev/prod convention; resolved per branch below.
+  # dev:  garden-club-frontend-dev
+  # prod: garden-club-frontend-prod
 
 jobs:
   # ── 1. Resolve environment ────────────────────────────────────────────────
@@ -26,23 +26,20 @@ jobs:
     name: Resolve environment
     runs-on: ubuntu-latest
     outputs:
-      env_label:      ${{ steps.env.outputs.env_label }}
-      ecs_cluster:    ${{ steps.env.outputs.ecs_cluster }}
-      ecs_service:    ${{ steps.env.outputs.ecs_service }}
-      image_tag_full: ${{ steps.env.outputs.image_tag_full }}
+      env_label:         ${{ steps.env.outputs.env_label }}
+      lightsail_service: ${{ steps.env.outputs.lightsail_service }}
+      image_tag_full:    ${{ steps.env.outputs.image_tag_full }}
     steps:
       - name: Set environment variables by branch
         id: env
         run: |
           SHA_SHORT="${GITHUB_SHA::8}"
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "env_label=prod"            >> "$GITHUB_OUTPUT"
-            echo "ecs_cluster=garden-club-prod" >> "$GITHUB_OUTPUT"
-            echo "ecs_service=garden-club-frontend-prod" >> "$GITHUB_OUTPUT"
+            echo "env_label=prod"                               >> "$GITHUB_OUTPUT"
+            echo "lightsail_service=garden-club-frontend-prod" >> "$GITHUB_OUTPUT"
           else
-            echo "env_label=dev"             >> "$GITHUB_OUTPUT"
-            echo "ecs_cluster=garden-club-dev"  >> "$GITHUB_OUTPUT"
-            echo "ecs_service=garden-club-frontend-dev"  >> "$GITHUB_OUTPUT"
+            echo "env_label=dev"                                >> "$GITHUB_OUTPUT"
+            echo "lightsail_service=garden-club-frontend-dev"  >> "$GITHUB_OUTPUT"
           fi
           echo "image_tag_full=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
 
@@ -64,7 +61,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-actions-ecs-role
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/garden-club-github-${{needs.resolve-env.outputs.env_label}}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -81,7 +78,7 @@ jobs:
           # Store these as GitHub Actions secrets scoped to each environment.
           NEXT_PUBLIC_API_URL:                ${{ secrets.NEXT_PUBLIC_API_URL }}
           NEXT_PUBLIC_IMAGES_URL:             ${{ secrets.NEXT_PUBLIC_IMAGES_URL }}
-          NEXT_PUBLIC_AWS_REGION:             ${{ vars.AWS_REGION }}
+          NEXT_PUBLIC_AWS_REGION:             ${{ env.AWS_REGION }}
           NEXT_PUBLIC_COGNITO_USER_POOL_ID:   ${{ secrets.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
           NEXT_PUBLIC_COGNITO_CLIENT_ID:      ${{ secrets.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
           NEXT_PUBLIC_IMAGES_BUCKET:          ${{ secrets.NEXT_PUBLIC_IMAGES_BUCKET }}
@@ -111,9 +108,9 @@ jobs:
           echo "**Environment:** \`${{ needs.resolve-env.outputs.env_label }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "**Image:** \`${{ steps.push.outputs.image_uri }}\`" >> "$GITHUB_STEP_SUMMARY"
 
-  # ── 3. Deploy to ECS Express Mode ────────────────────────────────────────
+  # ── 3. Deploy to Lightsail Container Service ─────────────────────────────
   deploy:
-    name: Deploy to ECS
+    name: Deploy to Lightsail
     runs-on: ubuntu-latest
     needs:
       - resolve-env
@@ -126,24 +123,80 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v5
         with:
-          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-actions-ecs-role
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/garden-club-github-${{ needs.resolve-env.outputs.env_label }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy new image to ECS Express service
-        uses: aws-actions/amazon-ecs-deploy-express-service@v1
-        with:
-          service: ${{ needs.resolve-env.outputs.ecs_service }}
-          cluster: ${{ needs.resolve-env.outputs.ecs_cluster }}
-          image: ${{ needs.build-and-push.outputs.image_uri }}
-          wait-for-service-stability: true
+      # Jobs run on separate fresh runners, so the image from the build job is
+      # not available here. Re-pull from ECR to get it local, then push to
+      # Lightsail's own registry. The OIDC role already has ECR read access.
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Pull image from ECR
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG:     ${{ needs.resolve-env.outputs.image_tag_full }}
+        run: |
+          docker pull "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+      - name: Install lightsailctl
+        run: |
+          sudo curl -fsSL "https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl" \
+            -o /usr/local/bin/lightsailctl
+          sudo chmod +x /usr/local/bin/lightsailctl
+
+      - name: Push image to Lightsail and deploy
+        env:
+          ECR_REGISTRY:      ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG:         ${{ needs.resolve-env.outputs.image_tag_full }}
+          LIGHTSAIL_SERVICE: ${{ needs.resolve-env.outputs.lightsail_service }}
+        run: |
+          # Push to Lightsail's internal registry. Stream output live (for error
+          # visibility) and save to a file for parsing the resulting image digest.
+          # Output contains a line like:
+          # Refer to this image as ":garden-club-frontend-dev.frontend.N" in deployments.
+          aws lightsail push-container-image \
+            --service-name "${LIGHTSAIL_SERVICE}" \
+            --label frontend \
+            --image "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" \
+            2>&1 | tee /tmp/ls_push_output.txt
+
+          LIGHTSAIL_IMAGE=$(grep -oP '(?<=Refer to this image as ")[^"]+' /tmp/ls_push_output.txt)
+
+          if [[ -z "${LIGHTSAIL_IMAGE}" ]]; then
+            echo "ERROR: could not parse Lightsail image digest from push output."
+            exit 1
+          fi
+
+          echo "Lightsail image: ${LIGHTSAIL_IMAGE}"
+
+          aws lightsail create-container-service-deployment \
+            --service-name "${LIGHTSAIL_SERVICE}" \
+            --containers "{
+              \"frontend\": {
+                \"image\": \"${LIGHTSAIL_IMAGE}\",
+                \"ports\": {\"3000\": \"HTTP\"}
+              }
+            }" \
+            --public-endpoint "{
+              \"containerName\": \"frontend\",
+              \"containerPort\": 3000,
+              \"healthCheck\": {
+                \"path\": \"/api/health\",
+                \"intervalSeconds\": 30,
+                \"timeoutSeconds\": 10,
+                \"unhealthyThreshold\": 3,
+                \"successCodes\": \"200-299\"
+              }
+            }"
 
       - name: Post deploy summary
         run: |
-          echo "## Frontend Deployment" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Environment:** \`${{ needs.resolve-env.outputs.env_label }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Image deployed:** \`${{ needs.build-and-push.outputs.image_uri }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "**ECS service:** \`${{ needs.resolve-env.outputs.ecs_service }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Cluster:** \`${{ needs.resolve-env.outputs.ecs_cluster }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Service is stable. Deployment complete." >> "$GITHUB_STEP_SUMMARY"
+          echo "## Frontend Deployment"                                                        >> "$GITHUB_STEP_SUMMARY"
+          echo ""                                                                               >> "$GITHUB_STEP_SUMMARY"
+          echo "**Environment:** \`${{ needs.resolve-env.outputs.env_label }}\`"              >> "$GITHUB_STEP_SUMMARY"
+          echo "**Image deployed:** \`${{ needs.build-and-push.outputs.image_uri }}\`"        >> "$GITHUB_STEP_SUMMARY"
+          echo "**Lightsail service:** \`${{ needs.resolve-env.outputs.lightsail_service }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo ""                                                                               >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployment submitted. Check Lightsail console for rollout status."             >> "$GITHUB_STEP_SUMMARY"

@@ -13,10 +13,10 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import { useRouter } from "next/navigation";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { apiGet } from "@/lib/api";
 import { ImageFolder } from "@/types/gallery";
 import { AlbumCard } from "@/components/gallery/AlbumCard";
 import { CreateAlbumDialog } from "@/components/gallery/CreateAlbumDialog";
+import { ImageService } from "@/services/imageService";
 
 export default function GalleryPage() {
   const router = useRouter();
@@ -33,8 +33,8 @@ export default function GalleryPage() {
   const loadFolders = async () => {
     try {
       setLoading(true);
-      const data = await apiGet<{ folders: ImageFolder[] }>("/images/folders");
-      setFolders(data.folders);
+      const folders = await ImageService.getImageFolders();
+      setFolders(folders);
     } catch (err) {
       setError("Failed to load albums");
       console.error(err);
@@ -60,7 +60,7 @@ export default function GalleryPage() {
           <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
             <CircularProgress />
           </Box>
-        ) : folders.length === 0 ? (
+        ) : folders?.length === 0 ? (
           <Box sx={{ textAlign: "center", py: 8 }}>
             <Typography variant="body1" color="text.secondary">
               No albums yet
@@ -72,6 +72,7 @@ export default function GalleryPage() {
               <Grid2 size={{ xs: 12, sm: 6, md: 4 }} key={folder.folderName}>
                 <AlbumCard
                   folder={folder}
+                  onRefresh={loadFolders}
                   onClick={() =>
                     router.push(
                       `/gallery/${encodeURIComponent(folder.folderName)}`
@@ -97,7 +98,7 @@ export default function GalleryPage() {
             <CreateAlbumDialog
               open={openDialog}
               onClose={() => setOpenDialog(false)}
-              onAlbumCreated={() => {
+              onAlbumChanged={() => {
                 setOpenDialog(false);
                 loadFolders();
               }}
