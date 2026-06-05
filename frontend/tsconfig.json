@@ -23,8 +23,7 @@
     },
     "allowJs": true,
     "incremental": true,
-    "moduleResolution": "node",
-    "ignoreDeprecations": "6.0",
+    "moduleResolution": "bundler",
     "plugins": [
       {
         "name": "next"
