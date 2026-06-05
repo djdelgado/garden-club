@@ -51,9 +51,15 @@ export default function EventsPage() {
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
-        <Typography variant="h2" gutterBottom>
-          Events
-        </Typography>
+        <Box sx={{ mb: 4 }}>
+          <Typography sx={{ fontSize: "0.75rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "primary.main", mb: 0.5 }}>
+            What&apos;s Growing
+          </Typography>
+          <Typography variant="h2">Upcoming Events</Typography>
+          <Typography color="text.secondary" sx={{ maxWidth: 480, mt: 0.5 }}>
+            From workshops to social mixers — there&apos;s always something blooming.
+          </Typography>
+        </Box>
 
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
