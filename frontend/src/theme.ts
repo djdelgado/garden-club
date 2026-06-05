@@ -2,75 +2,23 @@ import { createTheme } from "@mui/material/styles";
 
 export const theme = createTheme({
   palette: {
-    primary: {
-      main: "#59c744",
-      light: "#87de6e",
-      dark: "#33832c",
-      contrastText: "#ffffff",
-    },
-    secondary: {
-      main: "#42a835",
-      light: "#59c744",
-      dark: "#235622",
-      contrastText: "#ffffff",
-    },
-    success: {
-      main: "#59c744",
-    },
-    background: {
-      default: "#f5f5f5",
-      paper: "#ffffff",
-    },
+    primary:    { main: "#4a7c59", dark: "#2d4a32", light: "#6aab7a", contrastText: "#ffffff" },
+    warning:    { main: "#c98a1a" },
+    background: { default: "#f9f6f0", paper: "#ffffff" },
+    text:       { primary: "#2d4a32", secondary: "#6a7d6c", disabled: "#8a9e8d" },
+    divider:    "#d4e0c8",
   },
   typography: {
-    fontFamily: [
-      "-apple-system",
-      "BlinkMacSystemFont",
-      '"Segoe UI"',
-      "Roboto",
-      '"Helvetica Neue"',
-      "Arial",
-      "sans-serif",
-    ].join(","),
-    h1: {
-      fontSize: "2.5rem",
-      fontWeight: 700,
-      color: "#1b1b1b",
-    },
-    h2: {
-      fontSize: "2rem",
-      fontWeight: 600,
-      color: "#1b1b1b",
-    },
-    h3: {
-      fontSize: "1.5rem",
-      fontWeight: 600,
-      color: "#1b1b1b",
-    },
-    h6: {
-      fontSize: "1.1rem",
-      fontWeight: 500,
-    },
+    h1: { fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: 700 },
+    h2: { fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: 700 },
+    h3: { fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: 600 },
+    h4: { fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: 600 },
   },
+  shape: { borderRadius: 12 },
   components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: "none",
-          fontWeight: 600,
-        },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          "&:hover": {
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-            transition: "box-shadow 0.3s ease",
-          },
-        },
-      },
-    },
+    MuiButton:  { styleOverrides: { root: { textTransform: "none", fontWeight: 600 } } },
+    MuiCard:    { styleOverrides: { root: { boxShadow: "0 2px 12px rgba(74,124,89,0.06)" } } },
+    MuiChip:    { styleOverrides: { root: { borderRadius: 20 } } },
+    MuiAppBar:  { styleOverrides: { root: { backgroundColor: "rgba(249,246,240,0.92)", backdropFilter: "blur(8px)", borderBottom: "1px solid #d4e0c8" } } },
   },
 });
