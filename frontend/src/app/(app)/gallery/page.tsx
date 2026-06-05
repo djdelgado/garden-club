@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import {
   Box,
+  Button,
   Container,
   Typography,
   Alert,
   Fab,
-  Grid2,
+  ImageList,
+  ImageListItem,
   CircularProgress,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -46,9 +48,23 @@ export default function GalleryPage() {
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
-        <Typography variant="h2" gutterBottom>
-          Gallery
-        </Typography>
+        <Box sx={{ mb: 4 }}>
+          <Typography
+            sx={{
+              fontSize: "0.75rem",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+              color: "primary.main",
+              mb: 0.5,
+            }}
+          >
+            Memories
+          </Typography>
+          <Typography variant="h2">Photo Gallery</Typography>
+          <Typography color="text.secondary" sx={{ maxWidth: 480, mt: 0.5 }}>
+            Browse albums from past events and gatherings.
+          </Typography>
+        </Box>
 
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -67,9 +83,9 @@ export default function GalleryPage() {
             </Typography>
           </Box>
         ) : (
-          <Grid2 container spacing={3} sx={{ mt: 1 }}>
+          <ImageList cols={3} gap={16}>
             {folders.map((folder) => (
-              <Grid2 size={{ xs: 12, sm: 6, md: 4 }} key={folder.folderName}>
+              <ImageListItem key={folder.folderName}>
                 <AlbumCard
                   folder={folder}
                   onRefresh={loadFolders}
@@ -79,10 +95,32 @@ export default function GalleryPage() {
                     )
                   }
                 />
-              </Grid2>
+              </ImageListItem>
             ))}
-          </Grid2>
+          </ImageList>
         )}
+
+        <Box
+          sx={{
+            mt: 4,
+            border: "2px dashed #b8d4be",
+            borderRadius: 3,
+            p: 4,
+            textAlign: "center",
+          }}
+        >
+          <Typography variant="h6" gutterBottom>
+            Share Your Garden
+          </Typography>
+          <Typography color="text.secondary" variant="body2">
+            Members can upload photos from recent events
+          </Typography>
+          {isAdmin && (
+            <Button variant="contained" sx={{ mt: 2 }}>
+              Upload Photos
+            </Button>
+          )}
+        </Box>
 
         {isAdmin && (
           <>
