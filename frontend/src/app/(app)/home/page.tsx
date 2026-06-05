@@ -124,8 +124,7 @@ export default function HomePage() {
             lineHeight: 1.7,
           }}
         >
-          A welcoming society of passionate gardeners sharing knowledge, beauty,
-          and Louisiana's rich horticultural heritage.
+          {"A welcoming society of passionate gardeners sharing knowledge, beauty, and Louisiana's rich horticultural heritage."}
         </Typography>
 
         <Box
