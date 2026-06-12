@@ -78,12 +78,16 @@ jobs:
           # Store these as GitHub Actions secrets scoped to each environment.
           # Names must match frontend/src/lib/constants.ts exactly.
           NEXT_PUBLIC_API_BASE_URL:           ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
-          NEXT_PUBLIC_IMAGES_BASE_URL:        ${{ secrets.NEXT_PUBLIC_IMAGES_BASE_URL }}
+          NEXT_PUBLIC_IMAGES_BUCKET:          ${{ secrets.NEXT_PUBLIC_IMAGES_BUCKET }}
           NEXT_PUBLIC_AWS_REGION:             ${{ env.AWS_REGION }}
           NEXT_PUBLIC_COGNITO_USER_POOL_ID:   ${{ secrets.NEXT_PUBLIC_COGNITO_USER_POOL_ID }}
           NEXT_PUBLIC_COGNITO_CLIENT_ID:      ${{ secrets.NEXT_PUBLIC_COGNITO_CLIENT_ID }}
         run: |
           IMAGE_BASE="${ECR_REGISTRY}/${ECR_REPOSITORY}"
+
+          # constants.ts expects the full S3 base URL; build it from the bucket
+          # name secret + region (mirrors scripts/setup-develop.sh).
+          NEXT_PUBLIC_IMAGES_BASE_URL="https://${NEXT_PUBLIC_IMAGES_BUCKET}.s3.${NEXT_PUBLIC_AWS_REGION}.amazonaws.com"
 
           docker build \
             --build-arg NEXT_PUBLIC_API_BASE_URL="${NEXT_PUBLIC_API_BASE_URL}" \
