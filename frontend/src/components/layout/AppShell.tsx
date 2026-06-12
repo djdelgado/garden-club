@@ -1,21 +1,13 @@
 "use client";
 
 import { Box } from "@mui/material";
-import { SideNav } from "./SideNav";
-
-const DRAWER_WIDTH = 240;
+import { TopNav } from "./TopNav";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh" }}>
-      <SideNav />
-      <Box
-        sx={{
-          flex: 1,
-          overflow: "auto",
-          backgroundColor: "#f5f5f5",
-        }}
-      >
+    <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh", bgcolor: "background.default" }}>
+      <TopNav />
+      <Box component="main" sx={{ flex: 1, maxWidth: 960, mx: "auto", width: "100%", px: 3, pb: 6 }}>
         {children}
       </Box>
     </Box>

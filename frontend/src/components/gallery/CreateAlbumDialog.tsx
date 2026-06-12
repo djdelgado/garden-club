@@ -193,7 +193,7 @@ export function CreateAlbumDialog({
                   <ListItem key={f.name} disableGutters>
                     <ListItemText
                       primary={f.name}
-                      primaryTypographyProps={{ variant: "caption" }}
+                      slotProps={{ primary: { variant: "caption" } }}
                     />
                   </ListItem>
                 ))}
