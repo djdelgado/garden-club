@@ -31,10 +31,13 @@ export function AlbumCard({ folder, onClick, onRefresh }: AlbumCardProps) {
         cursor: "pointer",
         borderRadius: 3,
         boxShadow: 2,
+        height: 300,
+        display: "flex",
+        flexDirection: "column",
         "&:hover": { boxShadow: 6 },
       }}
     >
-      <CardActionArea>
+      <CardActionArea sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "stretch" }}>
       {folder.thumbnailUrl ? (
         <Box sx={{ position: "relative", height: 200 }}>
           <CardMedia
@@ -58,7 +61,7 @@ export function AlbumCard({ folder, onClick, onRefresh }: AlbumCardProps) {
           <PhotoLibraryIcon sx={{ fontSize: 64, color: "primary.main" }} />
         </Box>
       )}
-      <CardContent>
+      <CardContent sx={{ flex: 1 }}>
         <Typography variant="subtitle1" noWrap>
           {folder.folderName}
         </Typography>

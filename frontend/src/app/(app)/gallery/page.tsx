@@ -8,8 +8,7 @@ import {
   Typography,
   Alert,
   Fab,
-  ImageList,
-  ImageListItem,
+  Grid,
   CircularProgress,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -83,9 +82,9 @@ export default function GalleryPage() {
             </Typography>
           </Box>
         ) : (
-          <ImageList cols={3} gap={16}>
+          <Grid container spacing={2}>
             {folders.map((folder) => (
-              <ImageListItem key={folder.folderName}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={folder.folderName}>
                 <AlbumCard
                   folder={folder}
                   onRefresh={loadFolders}
@@ -95,9 +94,9 @@ export default function GalleryPage() {
                     )
                   }
                 />
-              </ImageListItem>
+              </Grid>
             ))}
-          </ImageList>
+          </Grid>
         )}
 
         <Box
