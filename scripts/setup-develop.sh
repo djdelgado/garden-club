@@ -25,7 +25,7 @@ if [ -z "$API_URL" ] || [ "$API_URL" = "None" ]; then
   exit 1
 fi
 
-cat > .env.develop.local <<EOF
+cat > .env.local <<EOF
 NEXT_PUBLIC_API_BASE_URL=$API_URL
 NEXT_PUBLIC_COGNITO_USER_POOL_ID=$USER_POOL_ID
 NEXT_PUBLIC_COGNITO_CLIENT_ID=$USER_POOL_CLIENT_ID
@@ -33,4 +33,4 @@ NEXT_PUBLIC_IMAGES_BASE_URL=https://$IMAGES_BUCKET.s3.$REGION.amazonaws.com
 NEXT_PUBLIC_AWS_REGION=$REGION
 EOF
 
-echo ".env.develop.local written — pointing at $STACK ($API_URL)"
+echo ".env.local written — pointing at $STACK ($API_URL)"
