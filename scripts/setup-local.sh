@@ -89,8 +89,8 @@ echo -e "${BLUE}Generating .env.local...${NC}"
 cat > .env.local <<EOF
 # Frontend - Public Environment Variables
 NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
-NEXT_PUBLIC_USER_POOL_ID=$USER_POOL_ID
-NEXT_PUBLIC_USER_POOL_CLIENT_ID=$CLIENT_ID
+NEXT_PUBLIC_COGNITO_USER_POOL_ID=$USER_POOL_ID
+NEXT_PUBLIC_COGNITO_CLIENT_ID=$CLIENT_ID
 NEXT_PUBLIC_IMAGES_BASE_URL=https://s3.localhost.localstack.cloud:4566/garden-club-images
 NEXT_PUBLIC_AWS_REGION=us-east-1
 
