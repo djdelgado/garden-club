@@ -8,10 +8,10 @@ Parameters:
     Type: String
     Default: local
     Description: Environment stage (local, dev, prod)
-  CorsOrigin:
-    Type: String
-    Default: http://localhost:3000
-    Description: CORS origin for API Gateway
+  CorsOrigins:
+    Type: CommaDelimitedList
+    Default: "http://localhost:3000"
+    Description: Comma-separated list of allowed CORS origins for API Gateway and S3
   LocalstackEndpoint:
     Type: String
     Default: ''
@@ -136,8 +136,7 @@ Resources:
         Status: Enabled
       CorsConfiguration:
         CorsRules:
-          - AllowedOrigins:
-              - !Ref CorsOrigin
+          - AllowedOrigins: !Ref CorsOrigins
             AllowedMethods:
               - PUT
               - POST
@@ -152,8 +151,7 @@ Resources:
     Properties:
       StageName: !Ref Stage
       CorsConfiguration:
-        AllowOrigins:
-          - !Ref CorsOrigin
+        AllowOrigins: !Ref CorsOrigins
         AllowHeaders:
           - Authorization
           - Content-Type
