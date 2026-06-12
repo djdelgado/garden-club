@@ -8,6 +8,9 @@
     "build": "cd frontend && npm run build",
     "start": "cd frontend && npm run start",
     "lint": "cd frontend && npm run lint",
+    "local:up": "docker-compose up -d localstack && sleep 5 && bash scripts/setup-local.sh",
+    "local:down": "docker-compose down",
+    "local:api": "cd backend && sam build && sam local start-api",
     "dev:remote": "bash scripts/setup-develop.sh && cd frontend && next dev --env-file ../.env.develop.local"
   },
   "workspaces": [
