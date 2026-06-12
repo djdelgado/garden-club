@@ -39,19 +39,15 @@ export function AlbumCard({ folder, onClick, onRefresh }: AlbumCardProps) {
     >
       <CardActionArea sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "stretch" }}>
       {folder.thumbnailUrl ? (
-        <Box sx={{ position: "relative", height: 200 }}>
           <CardMedia
             component="img"
-            height={200}
             image={folder.thumbnailUrl}
             alt={folder.folderName}
-            sx={{ objectFit: "cover" }}
+            sx={{ objectFit: "cover" , height: 200 }}
           />
-        </Box>
       ) : (
         <Box
           sx={{
-            height: 200,
             bgcolor: "primary.light",
             display: "flex",
             alignItems: "center",
