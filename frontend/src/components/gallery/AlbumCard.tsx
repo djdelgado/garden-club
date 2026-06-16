@@ -31,7 +31,6 @@ export function AlbumCard({ folder, onClick, onRefresh }: AlbumCardProps) {
         cursor: "pointer",
         borderRadius: 3,
         boxShadow: 2,
-        height: 300,
         display: "flex",
         flexDirection: "column",
         "&:hover": { boxShadow: 6 },

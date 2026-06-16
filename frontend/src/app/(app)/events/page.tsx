@@ -32,8 +32,7 @@ export default function EventsPage() {
   const loadEvents = async () => {
     try {
       setLoading(true);
-      const data = await EventService.getEvents();
-      console.log(data)
+      const data = await EventService.getEvents(new Date().toISOString());
       setEvents(data);
     } catch (err) {
       setError("Failed to load events");
@@ -55,10 +54,7 @@ export default function EventsPage() {
           <Typography sx={{ fontSize: "0.75rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "primary.main", mb: 0.5 }}>
             What&apos;s Growing
           </Typography>
-          <Typography variant="h2">Upcoming Events</Typography>
-          <Typography color="text.secondary" sx={{ maxWidth: 480, mt: 0.5 }}>
-            From workshops to social mixers — there&apos;s always something blooming.
-          </Typography>
+          <Typography variant="h3" sx={{ fontStyle: "italic" }}>Upcoming Events</Typography>
         </Box>
 
         {error && (

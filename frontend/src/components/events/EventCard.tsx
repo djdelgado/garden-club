@@ -73,7 +73,8 @@ export function EventCard({ event, onClick }: EventCardProps) {
           {event.description.length > 80 ? "..." : ""}
         </Typography>
       </CardContent>
-      <Box sx={{ display: "flex", alignItems: "center", pr: 2 }}>
+      {/* TODO: Add RSVP button */}
+      {/* <Box sx={{ display: "flex", alignItems: "center", pr: 2 }}>
         <Button
           variant="outlined"
           color="primary"
@@ -82,7 +83,7 @@ export function EventCard({ event, onClick }: EventCardProps) {
         >
           RSVP
         </Button>
-      </Box>
+      </Box> */}
     </Card>
   );
 }

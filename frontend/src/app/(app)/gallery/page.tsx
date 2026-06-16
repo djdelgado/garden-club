@@ -59,10 +59,7 @@ export default function GalleryPage() {
           >
             Memories
           </Typography>
-          <Typography variant="h2">Photo Gallery</Typography>
-          <Typography color="text.secondary" sx={{ maxWidth: 480, mt: 0.5 }}>
-            Browse albums from past events and gatherings.
-          </Typography>
+          <Typography variant="h3" sx={{ fontStyle: "italic" }}>Photo Gallery</Typography>
         </Box>
 
         {error && (
@@ -98,28 +95,6 @@ export default function GalleryPage() {
             ))}
           </Grid>
         )}
-
-        <Box
-          sx={{
-            mt: 4,
-            border: "2px dashed #b8d4be",
-            borderRadius: 3,
-            p: 4,
-            textAlign: "center",
-          }}
-        >
-          <Typography variant="h6" gutterBottom>
-            Share Your Garden
-          </Typography>
-          <Typography color="text.secondary" variant="body2">
-            Members can upload photos from recent events
-          </Typography>
-          {isAdmin && (
-            <Button variant="contained" sx={{ mt: 2 }}>
-              Upload Photos
-            </Button>
-          )}
-        </Box>
 
         {isAdmin && (
           <>

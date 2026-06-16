@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import boto3
@@ -48,14 +48,20 @@ def get_user_id(event: Dict[str, Any]) -> str:
 
 
 def get_events(event: Dict[str, Any]) -> Dict[str, Any]:
-    """GET /events - Upcoming events + past 30 days, sorted by startTime"""
+    """GET /events - List events, optionally filtered by ?startDate=YYYY-MM-DD"""
     try:
-        cutoff = (datetime.utcnow() - timedelta(days=30)).isoformat()
-        response = events_table.scan(
-            FilterExpression="#st >= :cutoff",
-            ExpressionAttributeNames={"#st": "startTime"},
-            ExpressionAttributeValues={":cutoff": cutoff},
-        )
+        params = event.get("queryStringParameters") or {}
+        start_time = params.get("startTime")
+
+        if start_time:
+            response = events_table.scan(
+                FilterExpression="#st >= :cutoff",
+                ExpressionAttributeNames={"#st": "startTime"},
+                ExpressionAttributeValues={":cutoff": start_time},
+            )
+        else:
+            response = events_table.scan()
+
         items = response.get("Items", [])
         items.sort(key=lambda x: x.get("startTime", ""))
         return format_response(200, items)
@@ -81,7 +87,7 @@ def create_event(body: str, user_id: str) -> Dict[str, Any]:
     try:
         data = json.loads(body)
         event_data = Event(**data)
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         item: EventItem = {
             **event_data.model_dump(),
