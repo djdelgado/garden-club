@@ -31,6 +31,12 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
+          # The Groomer (a bot) adds `agent:ready`, so this run is initiated by a bot
+          # actor. The action blocks bot-initiated runs by default; allow the Claude bot
+          # so the Groomer -> Implementer handoff works. Scoped to this one bot rather
+          # than '*' because the repo is public.
+          allowed_bots: "claude[bot]"
+
           # To make the draft PR re-trigger the review + CI workflows, supply a PAT or
           # GitHub App token here instead of the default GITHUB_TOKEN (which, by design,
           # does NOT trigger other workflows). Create a fine-grained PAT with
