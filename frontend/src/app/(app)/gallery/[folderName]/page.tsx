@@ -6,13 +6,16 @@ import {
   Container,
   Typography,
   Alert,
-  CircularProgress,
+  ImageList,
+  ImageListItem,
   IconButton,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useParams, useRouter } from "next/navigation";
 import { GardenImage } from "@/types/image";
 import { ImageGrid } from "@/components/gallery/ImageGrid";
+import { ImageTileSkeleton } from "@/components/common/ImageTileSkeleton";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { ImageService } from "@/services/imageService";
 
 export default function AlbumDetailPage() {
@@ -23,6 +26,7 @@ export default function AlbumDetailPage() {
   const [images, setImages] = useState<GardenImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const showSkeleton = useDelayedFlag(loading);
 
   useEffect(() => {
     const loadImages = async () => {
@@ -62,9 +66,14 @@ export default function AlbumDetailPage() {
         )}
 
         {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress />
-          </Box>
+          <ImageList cols={3} gap={8}>
+            {showSkeleton &&
+              Array.from({ length: 9 }).map((_, index) => (
+                <ImageListItem key={index}>
+                  <ImageTileSkeleton />
+                </ImageListItem>
+              ))}
+          </ImageList>
         ) : (
           <ImageGrid images={images} />
         )}

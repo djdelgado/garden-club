@@ -1,8 +1,9 @@
 "use client";
 
-import { Grid, Box, CircularProgress } from "@mui/material";
+import { Grid } from "@mui/material";
 import { Event } from "@/types/event";
 import { EventCard } from "./EventCard";
+import { EventCardSkeleton } from "@/components/common/EventCardSkeleton";
 
 interface EventListProps {
   events: Event[];
@@ -17,9 +18,13 @@ export function EventList({
 }: EventListProps) {
   if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-        <CircularProgress />
-      </Box>
+      <Grid container spacing={3}>
+        {Array.from({ length: 3 }).map((_, index) => (
+          <Grid size={12} key={index}>
+            <EventCardSkeleton />
+          </Grid>
+        ))}
+      </Grid>
     );
   }
 
