@@ -1,0 +1,70 @@
+name: Agent — Implement Issue
+
+# The "Implementer" teammate. When you add the `agent:ready` label to an issue,
+# Claude picks it up, writes the code on a branch, and opens a DRAFT pull request
+# for you to review and merge. A human always reviews and merges — the agent never
+# merges its own work.
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  implement:
+    # Only fire when the trigger is specifically the `agent:ready` label.
+    if: github.event.label.name == 'agent:ready'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # create branch + push commits
+      pull-requests: write   # open the draft PR
+      issues: write          # comment + swap labels
+      id-token: write
+      actions: read          # read CI results
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # full history so the agent can branch/diff cleanly
+
+      - name: Run Claude Code (implement)
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          # To make the draft PR re-trigger the review + CI workflows, supply a PAT or
+          # GitHub App token here instead of the default GITHUB_TOKEN (which, by design,
+          # does NOT trigger other workflows). Create a fine-grained PAT with
+          # contents+pull_requests+issues write, store it as secret AGENT_GH_TOKEN, and
+          # uncomment the next line.
+          # github_token: ${{ secrets.AGENT_GH_TOKEN }}
+
+          additional_permissions: |
+            actions: read
+
+          # Allow the git/gh tooling the agent needs to branch, commit, and open a PR.
+          claude_args: |
+            --model claude-opus-4-8
+            --allowed-tools "Bash,Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh:*)"
+
+          prompt: |
+            You are the Implementer on this repo's autonomous dev team. Implement GitHub
+            issue #${{ github.event.issue.number }} in ${{ github.repository }}.
+
+            Follow these rules exactly:
+            1. First read the issue (title, body, all comments) and the repo's CLAUDE.md
+               for conventions. Read the "Agent workflow" section there.
+            2. If the issue is ambiguous, under-specified, or you would have to guess at
+               intent: do NOT write code. Instead post a comment on the issue listing your
+               specific questions, remove the `agent:ready` label, add the `agent:blocked`
+               label, and stop.
+            3. Otherwise: swap the label `agent:ready` -> `agent:in-progress` on the issue.
+            4. Create a branch named `agent/issue-${{ github.event.issue.number }}-<short-slug>`
+               off the default branch (`develop`).
+            5. Implement the change. Match existing code style and patterns. Keep the diff
+               focused on what the issue asks for — nothing extra.
+            6. Commit with a clear message and open a DRAFT pull request against `develop`
+               using `gh pr create --draft`. The PR body must include `Closes #${{ github.event.issue.number }}`,
+               a summary of the approach, and how you verified it (or why you couldn't).
+            7. Post a brief comment on the issue linking the draft PR.
+
+            Do not merge the PR. Do not push directly to `develop` or `main`.
