@@ -9,13 +9,14 @@ import {
   Alert,
   Fab,
   Grid,
-  CircularProgress,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import { useRouter } from "next/navigation";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { ImageFolder } from "@/types/gallery";
 import { AlbumCard } from "@/components/gallery/AlbumCard";
+import { AlbumCardSkeleton } from "@/components/common/AlbumCardSkeleton";
 import { CreateAlbumDialog } from "@/components/gallery/CreateAlbumDialog";
 import { ImageService } from "@/services/imageService";
 
@@ -26,6 +27,7 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
+  const showSkeleton = useDelayedFlag(loading);
 
   useEffect(() => {
     loadFolders();
@@ -69,9 +71,14 @@ export default function GalleryPage() {
         )}
 
         {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-            <CircularProgress />
-          </Box>
+          <Grid container spacing={2}>
+            {showSkeleton &&
+              Array.from({ length: 6 }).map((_, index) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
+                  <AlbumCardSkeleton />
+                </Grid>
+              ))}
+          </Grid>
         ) : folders?.length === 0 ? (
           <Box sx={{ textAlign: "center", py: 8 }}>
             <Typography variant="body1" color="text.secondary">

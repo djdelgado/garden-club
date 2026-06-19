@@ -7,10 +7,10 @@ import {
   Typography,
   Alert,
   Fab,
-  CircularProgress
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { EventService } from "@/services/eventService";
 import { Event } from "@/types/event";
 import { EventList } from "@/components/events/EventList";
@@ -24,6 +24,7 @@ export default function EventsPage() {
   const [error, setError] = useState<string | null>(null);
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const showSkeleton = useDelayedFlag(loading);
 
   useEffect(() => {
     loadEvents();
@@ -65,9 +66,11 @@ export default function EventsPage() {
 
         <Box sx={{ mt: 3 }}>
           {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-              <CircularProgress />
-            </Box>
+            <EventList
+              events={[]}
+              loading={showSkeleton}
+              onEventClick={handleEventClick}
+            />
           ) : events.length == 0 ? (
             <Typography variant="body1" color="text.secondary">
               No events yet
@@ -75,7 +78,6 @@ export default function EventsPage() {
           ) :
             (<EventList
               events={events}
-              loading={loading}
               onEventClick={handleEventClick}
             />)
           }
