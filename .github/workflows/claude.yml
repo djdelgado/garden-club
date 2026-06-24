@@ -22,6 +22,7 @@ jobs:
       contents: write       # push fixes in response to review comments
       pull-requests: write  # post reply comments on the PR
       issues: write         # comment on issues when @claude is used there
+      workflows: write      # edit files in .github/workflows/
       id-token: write
       actions: read
     steps:
