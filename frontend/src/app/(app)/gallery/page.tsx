@@ -1,26 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import {
   Box,
-  Button,
   Container,
   Typography,
   Alert,
   Fab,
   Grid,
+  ImageList,
+  ImageListItem,
+  IconButton,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import { useRouter } from "next/navigation";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { ImageFolder } from "@/types/gallery";
+import { GardenImage } from "@/types/image";
 import { AlbumCard } from "@/components/gallery/AlbumCard";
 import { AlbumCardSkeleton } from "@/components/common/AlbumCardSkeleton";
 import { CreateAlbumDialog } from "@/components/gallery/CreateAlbumDialog";
+import { ImageGrid } from "@/components/gallery/ImageGrid";
+import { ImageTileSkeleton } from "@/components/common/ImageTileSkeleton";
 import { ImageService } from "@/services/imageService";
 
-export default function GalleryPage() {
+function AlbumList() {
   const router = useRouter();
   const { isAdmin } = useIsAdmin();
   const [folders, setFolders] = useState<ImageFolder[]>([]);
@@ -94,7 +100,7 @@ export default function GalleryPage() {
                   onRefresh={loadFolders}
                   onClick={() =>
                     router.push(
-                      `/gallery/${encodeURIComponent(folder.folderName)}`
+                      `/gallery?folder=${encodeURIComponent(folder.folderName)}`
                     )
                   }
                 />
@@ -126,5 +132,85 @@ export default function GalleryPage() {
         )}
       </Box>
     </Container>
+  );
+}
+
+function AlbumDetail({ folderName }: { folderName: string }) {
+  const router = useRouter();
+  const [images, setImages] = useState<GardenImage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const showSkeleton = useDelayedFlag(loading);
+
+  useEffect(() => {
+    const loadImages = async () => {
+      try {
+        setLoading(true);
+        const images = await ImageService.getImagesbyFolderName(folderName);
+        setImages(images);
+      } catch (err) {
+        setError("Failed to load images");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadImages();
+  }, [folderName]);
+
+  const backClicked = () => {
+    return router.push("/gallery");
+  };
+
+  return (
+    <Container maxWidth="lg">
+      <Box sx={{ py: 4 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+          <IconButton onClick={backClicked} aria-label="back">
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h2">{folderName}</Typography>
+        </Box>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {loading ? (
+          <ImageList cols={3} gap={8}>
+            {showSkeleton &&
+              Array.from({ length: 9 }).map((_, index) => (
+                <ImageListItem key={index}>
+                  <ImageTileSkeleton />
+                </ImageListItem>
+              ))}
+          </ImageList>
+        ) : (
+          <ImageGrid images={images} />
+        )}
+      </Box>
+    </Container>
+  );
+}
+
+function GalleryContent() {
+  const searchParams = useSearchParams();
+  const folder = searchParams.get("folder");
+
+  if (folder) {
+    return <AlbumDetail folderName={folder} />;
+  }
+
+  return <AlbumList />;
+}
+
+export default function GalleryPage() {
+  return (
+    <Suspense>
+      <GalleryContent />
+    </Suspense>
   );
 }

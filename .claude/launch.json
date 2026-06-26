@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": false
+    },
+    {
+      "name": "static-export",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "frontend/out", "-l", "3000"],
+      "port": 3000,
+      "autoPort": false
     }
   ]
 }
