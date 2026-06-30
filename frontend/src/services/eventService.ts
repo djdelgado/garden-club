@@ -5,8 +5,9 @@ const EVENT_PATH = "/events";
 
 export const EventService = {
 
-  getEvents: async () => {
-    return apiGet<Event[]>(EVENT_PATH);
+  getEvents: async (startTime?: string) => {
+    const url = startTime ? `${EVENT_PATH}?startTime=${startTime}` : EVENT_PATH;
+    return apiGet<Event[]>(url);
   },
 
   createEvent: async (event: Record<string, unknown>) => {

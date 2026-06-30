@@ -1,0 +1,58 @@
+name: Agent — Groom Issue
+
+# The "Groomer" teammate. Runs when an issue is opened, or when you add the
+# `agent:triage` label to an existing issue. It triages: asks clarifying questions
+# on vague issues, applies functional labels, sketches an implementation approach,
+# and splits oversized issues into sub-issues. It only marks an issue `agent:ready`
+# (which the Implementer picks up) once it is clear enough to build.
+
+on:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  groom:
+    # Run on freshly opened issues, or when `agent:triage` is explicitly added.
+    # Ignore the agent's own lifecycle labels so this never fights the Implementer.
+    if: |
+      github.event.action == 'opened' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'agent:triage')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code (groom)
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          claude_args: |
+            --model claude-opus-4-8
+            --allowed-tools "Bash,Read,Glob,Grep,Bash(gh:*)"
+
+          prompt: |
+            You are the Groomer on this repo's autonomous dev team. Triage GitHub issue
+            #${{ github.event.issue.number }} in ${{ github.repository }}.
+
+            Steps:
+            1. Read the issue and the repo's CLAUDE.md for context and conventions.
+            2. Apply the appropriate functional labels from the existing set
+               (e.g. backend, frontend, infra, bug, enhancement, documentation, ux,
+               performance). Use `gh issue edit` / `gh label` — only existing labels.
+            3. Assess clarity:
+               - If the issue is vague or missing key detail, post a comment with a short
+                 numbered list of specific clarifying questions, add the `agent:blocked`
+                 label, and stop (do NOT mark it ready).
+               - If the issue is large/multi-part, post a comment proposing a breakdown and
+                 create sub-issues with `gh issue create`, referencing this parent issue.
+               - If the issue is clear and reasonably scoped, post a brief implementation
+                 sketch as a comment (files likely touched, approach, risks) and add the
+                 `agent:ready` label so the Implementer can pick it up.
+            4. Keep comments concise and actionable. Do not write code or open PRs.

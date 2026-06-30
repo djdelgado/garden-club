@@ -195,3 +195,26 @@ Currently no test framework is set up. Tests would be added to:
 - **Backend**: Lambda handlers should be thin; move business logic to separate modules
 - **Naming**: camelCase for JS/TS, snake_case for Python
 - **Async**: Use async/await (frontend) and async def (Python backend)
+
+## Agent Workflow
+
+This repo runs an autonomous "dev team" via GitHub Actions. Three roles share these rules:
+
+- **Groomer** (`.github/workflows/agent-groom.yml`) — triages issues on open or when
+  `agent:triage` is added: applies functional labels, asks clarifying questions, splits
+  large issues into sub-issues, and only adds `agent:ready` once an issue is clear.
+- **Implementer** (`.github/workflows/agent-implement.yml`) — fires when `agent:ready` is
+  added. It implements the issue and opens a **draft PR**.
+- **Reviewer** (`.github/workflows/claude-code-review.yml`) — auto-reviews opened PRs.
+
+**Rules for any agent run:**
+- **Ask, don't guess.** If an issue is ambiguous, comment your questions, apply
+  `agent:blocked`, and stop — never guess at intent.
+- **Branch naming**: `agent/issue-<number>-<short-slug>`, branched off `develop`.
+- **Always open PRs as drafts** (`gh pr create --draft`) against `develop`, with
+  `Closes #<number>` in the body plus a summary and how it was verified.
+- **Never merge** and **never push directly** to `develop` or `main` — a human reviews and
+  merges every PR.
+- **Label lifecycle**: `agent:triage` → `agent:ready` → `agent:in-progress` → (draft PR);
+  `agent:blocked` whenever input is needed.
+- Keep diffs focused on the issue; match existing code style and conventions.

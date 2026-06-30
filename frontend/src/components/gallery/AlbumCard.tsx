@@ -1,12 +1,11 @@
 "use client";
 
-import { Card, CardContent, CardMedia, Typography, Box, CardActionArea, CardActions, Button, IconButton } from "@mui/material";
+import { Card, CardContent, CardMedia, Typography, Box, CardActionArea, CardActions, IconButton } from "@mui/material";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import EditIcon from '@mui/icons-material/Edit';
 import { ImageFolder } from "@/types/gallery";
 import { useState } from "react";
 import { CreateAlbumDialog } from "./CreateAlbumDialog";
-import { DeleteAlbumBtn } from "./DeleteAlbumBtn";
 
 interface AlbumCardProps {
   folder: ImageFolder;
@@ -30,42 +29,44 @@ export function AlbumCard({ folder, onClick, onRefresh }: AlbumCardProps) {
       onClick={onClick}
       sx={{
         cursor: "pointer",
-        "&:hover": { boxShadow: 4 },
+        borderRadius: 3,
+        boxShadow: 2,
+        display: "flex",
+        flexDirection: "column",
+        "&:hover": { boxShadow: 6 },
       }}
     >
-      <CardActionArea>
+      <CardActionArea sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "stretch" }}>
       {folder.thumbnailUrl ? (
-        <CardMedia
-          component="img"
-          height={200}
-          image={folder.thumbnailUrl}
-          alt={folder.folderName}
-          sx={{ objectFit: "cover" }}
-        />
+          <CardMedia
+            component="img"
+            image={folder.thumbnailUrl}
+            alt={folder.folderName}
+            sx={{ objectFit: "cover" , height: 200 }}
+          />
       ) : (
         <Box
           sx={{
-            height: 200,
-            bgcolor: "grey.200",
+            bgcolor: "primary.light",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <PhotoLibraryIcon sx={{ fontSize: 64, color: "grey.400" }} />
+          <PhotoLibraryIcon sx={{ fontSize: 64, color: "primary.main" }} />
         </Box>
       )}
-      <CardContent>
-        <Typography variant="h6" noWrap>
+      <CardContent sx={{ flex: 1 }}>
+        <Typography variant="subtitle1" noWrap>
           {folder.folderName}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" color="primary">
           {folder.imageCount} {folder.imageCount === 1 ? "photo" : "photos"}
         </Typography>
       </CardContent>
       </CardActionArea>
       <CardActions>
-        <IconButton aria-label="delete" size="small" onClick={editClicked}>
+        <IconButton aria-label="edit" size="small" onClick={editClicked}>
           <EditIcon fontSize="inherit" />
         </IconButton>
       </CardActions>
