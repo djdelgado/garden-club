@@ -16,7 +16,7 @@ stack_name          = "garden-club-dev"
 resolve_s3          = true
 region              = "us-east-1"
 capabilities        = "CAPABILITY_IAM"
-parameter_overrides = "Stage=\"dev\" CorsOrigins=\"https://garden-club-frontend-dev.k4bz2587346d4.us-east-1.cs.amazonlightsail.com,http://localhost:3000\" LocalstackEndpoint=\"\" S3PublicEndpoint=\"\""
+parameter_overrides = "Stage=\"dev\" CorsOrigins=\"https://garden-club-frontend-dev.k4bz2587346d4.us-east-1.cs.amazonlightsail.com,http://localhost:3000,https://d2hadv56gwzzvi.cloudfront.net\" LocalstackEndpoint=\"\" S3PublicEndpoint=\"\""
 confirm_changeset   = true
 disable_rollback    = false
 
@@ -31,6 +31,6 @@ stack_name          = "garden-club-prod"
 resolve_s3          = true
 region              = "us-east-1"
 capabilities        = "CAPABILITY_IAM CAPABILITY_AUTO_EXPAND"
-parameter_overrides = "Stage=prod CorsOrigins=https://www.YOUR_DOMAIN.com"
+parameter_overrides = "Stage=prod CorsOrigins=https://dirwgwrlkhts4.cloudfront.net"
 confirm_changeset   = false
 disable_rollback    = false
