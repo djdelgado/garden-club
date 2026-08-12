@@ -40,7 +40,19 @@ export default function SignInPage() {
         }}
       >
         <Box sx={{ width: "100%" }}>
-          <Authenticator socialProviders={['google']}>
+          <Authenticator
+            socialProviders={['google']}
+            formFields={{
+              forceNewPassword: {
+                name: {
+                  label: "Full Name",
+                  placeholder: "Enter your full name",
+                  isRequired: true,
+                  order: 1,
+                },
+              },
+            }}
+          >
             {() => <RedirectToHome />}
           </Authenticator>
         </Box>
