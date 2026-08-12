@@ -13,8 +13,10 @@ export default function SignUpPage() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        await fetchAuthSession();
-        router.push("/home");
+        const session = await fetchAuthSession();
+        if (session.tokens) {
+          router.push("/home");
+        }
       } catch {
         // Not authenticated, show signup form
       }
