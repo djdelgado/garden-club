@@ -17,6 +17,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "aws-amplify/auth";
 import { useAuth } from "@/hooks/useAuth";
+import { clearTokenCache } from "@/lib/api";
 
 const NAV_LINKS = [
   { label: "Home", href: "/home" },
@@ -56,6 +57,7 @@ export function TopNav() {
     handleMenuClose();
     try {
       await signOut();
+      clearTokenCache();
       router.push("/signin");
     } catch (error) {
       console.error("Sign out error:", error);
