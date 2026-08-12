@@ -61,6 +61,17 @@ awslocal dynamodb create-table \
 
 echo -e "${GREEN}✓ Images table created${NC}"
 
+awslocal dynamodb create-table \
+  --table-name GardenClubMembers \
+  --attribute-definitions \
+    AttributeName=memberId,AttributeType=S \
+  --key-schema \
+    AttributeName=memberId,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  2>/dev/null || echo "Members table already exists"
+
+echo -e "${GREEN}✓ Members table created${NC}"
+
 echo -e "${BLUE}Creating S3 bucket...${NC}"
 
 awslocal s3 mb s3://garden-club-images 2>/dev/null || echo "Bucket already exists"

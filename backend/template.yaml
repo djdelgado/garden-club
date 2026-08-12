@@ -30,7 +30,9 @@ Globals:
       Variables:
         EVENTS_TABLE_NAME: !Ref EventsTable
         IMAGES_TABLE_NAME: !Ref ImagesTable
+        MEMBERS_TABLE_NAME: !Ref MembersTable
         IMAGES_BUCKET_NAME: !Ref ImagesBucket
+        USER_POOL_ID: !Ref GardenClubUserPool
         POWERTOOLS_SERVICE_NAME: GardenClub
         LOG_LEVEL: INFO
         LOCALSTACK_ENDPOINT: !Ref LocalstackEndpoint
@@ -119,6 +121,18 @@ Resources:
           Projection:
             ProjectionType: ALL
 
+  MembersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'GardenClubMembers-${Stage}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: memberId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: memberId
+          KeyType: HASH
+
   # S3 Bucket
   ImagesBucket:
     Type: AWS::S3::Bucket
@@ -196,6 +210,42 @@ Resources:
                 Resource:
                   - !GetAtt EventsTable.Arn
                   - !Sub '${EventsTable.Arn}/index/*'
+
+  MembersLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAndCognitoAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt MembersTable.Arn
+                  - !Sub '${MembersTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminDeleteUser
+                  - cognito-idp:AdminAddUserToGroup
+                  - cognito-idp:ListUsers
+                Resource: !GetAtt GardenClubUserPool.Arn
 
   ImagesLambdaRole:
     Type: AWS::IAM::Role
@@ -298,6 +348,39 @@ Resources:
           Properties:
             ApiId: !Ref GardenClubApi
             Path: /events/{id}
+            Method: DELETE
+
+  MembersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'GardenClubMembersFunction-${Stage}'
+      CodeUri: functions/members/
+      Handler: handler.lambda_handler
+      Role: !GetAtt MembersLambdaRole.Arn
+      Events:
+        GetMembers:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /members
+            Method: GET
+        CreateMember:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /members
+            Method: POST
+        UpdateMember:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /members/{memberId}
+            Method: PUT
+        DeleteMember:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /members/{memberId}
             Method: DELETE
 
   ImagesFunction:
