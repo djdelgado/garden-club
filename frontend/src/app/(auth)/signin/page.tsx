@@ -41,7 +41,6 @@ export default function SignInPage() {
       >
         <Box sx={{ width: "100%" }}>
           <Authenticator
-            socialProviders={['google']}
             formFields={{
               forceNewPassword: {
                 name: {
