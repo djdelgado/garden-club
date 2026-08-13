@@ -33,7 +33,9 @@ export default function EventsPage() {
   const loadEvents = async () => {
     try {
       setLoading(true);
-      const data = await EventService.getEvents(new Date().toISOString());
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const data = await EventService.getEvents(startOfDay.toISOString());
       setEvents(data);
     } catch (err) {
       setError("Failed to load events");
