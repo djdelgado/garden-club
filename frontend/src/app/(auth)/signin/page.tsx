@@ -41,6 +41,7 @@ export default function SignInPage() {
       >
         <Box sx={{ width: "100%" }}>
           <Authenticator
+            hideSignUp
             formFields={{
               forceNewPassword: {
                 name: {
