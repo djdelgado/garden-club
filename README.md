@@ -137,6 +137,30 @@ sam build
 sam deploy --guided
 ```
 
+### Bootstrap the First Admin
+
+On a freshly deployed stack no admin exists, and `POST /members` is Admins-only —
+so there is no way to create the first admin through the app. Run this **once per
+environment** (`dev`, `prod`) to create a Cognito user and add them to the
+`Admins` group:
+
+```bash
+# By stack name (resolves the UserPoolId output automatically)
+./scripts/bootstrap-admin.sh garden-club-dev admin@example.com
+
+# Or pass a user pool ID directly
+./scripts/bootstrap-admin.sh us-east-1_XXXXXXXXX admin@example.com
+```
+
+The script is idempotent — re-running it for an existing user just ensures group
+membership. It sends a real invite email (`--desired-delivery-mediums EMAIL`), so
+be deliberate about the address you use in `prod`. The bootstrapped user starts in
+`FORCE_CHANGE_PASSWORD` state and must set a new password on first sign-in.
+
+> This only affects real AWS environments. Locally there is no Cognito (LocalStack
+> Community); the members handler falls back to the `LOCAL_DEV_CLAIMS` escape hatch
+> for admin gating.
+
 ### Deploy Frontend → ECS Express Mode
 
 The frontend is packaged as a Docker container and deployed automatically to Amazon ECS Express Mode (Fargate) via GitHub Actions on every push to `develop` or `main`.

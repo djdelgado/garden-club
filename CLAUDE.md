@@ -136,8 +136,14 @@ Currently no test framework is set up. Tests would be added to:
 
 ### Deploying to AWS
 1. **Backend**: `cd backend && sam build && sam deploy --guided`
-2. **Frontend**: `cd frontend && npm run build` → deploy via Amplify Hosting or similar
-3. Update `.env.local` with production Cognito/API Gateway endpoints
+2. **Bootstrap the first admin** (once per environment — `dev`, `prod`):
+   `./scripts/bootstrap-admin.sh <stack-name|user-pool-id> <email>` creates a
+   Cognito user and adds them to the `Admins` group. On a fresh stack no admin
+   exists and `POST /members` is Admins-only, so this is the only way to create
+   the first one. The script is idempotent; the user starts in
+   `FORCE_CHANGE_PASSWORD` state and must set a password on first sign-in.
+3. **Frontend**: `cd frontend && npm run build` → deploy via Amplify Hosting or similar
+4. Update `.env.local` with production Cognito/API Gateway endpoints
 
 ## Important Implementation Details
 
