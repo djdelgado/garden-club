@@ -38,9 +38,19 @@ def format_response(status_code: int, body: Any) -> Dict[str, Any]:
 
 
 def get_user_id(event: Dict[str, Any]) -> str:
-    """Extract user ID from JWT token context"""
+    """Extract user ID from JWT token context.
+
+    HTTP API (v2) nests JWT claims under `authorizer.jwt.claims` — the missing
+    `.jwt` segment is why uploadedBy was recorded as "unknown".
+    """
     try:
-        return event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("sub", "unknown")
+        return (
+            event.get("requestContext", {})
+            .get("authorizer", {})
+            .get("jwt", {})
+            .get("claims", {})
+            .get("sub", "unknown")
+        )
     except Exception:
         return "unknown"
 
