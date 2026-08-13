@@ -41,6 +41,11 @@ export default function SignInPage() {
       >
         <Box sx={{ width: "100%" }}>
           <Authenticator
+            // Members are admin-created, and the user pool sets
+            // AllowAdminCreateUserOnly — without this the Authenticator still
+            // renders its own "Create Account" tab, and anyone using it hits a
+            // Cognito rejection with no explanation.
+            hideSignUp
             formFields={{
               forceNewPassword: {
                 name: {
