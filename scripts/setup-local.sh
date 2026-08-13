@@ -65,8 +65,13 @@ awslocal dynamodb create-table \
   --table-name GardenClubMembers \
   --attribute-definitions \
     AttributeName=memberId,AttributeType=S \
+    AttributeName=cognitoSub,AttributeType=S \
+    AttributeName=emailLower,AttributeType=S \
   --key-schema \
     AttributeName=memberId,KeyType=HASH \
+  --global-secondary-indexes \
+    "IndexName=CognitoSubIndex,KeySchema=[{AttributeName=cognitoSub,KeyType=HASH}],Projection={ProjectionType=ALL}" \
+    "IndexName=EmailIndex,KeySchema=[{AttributeName=emailLower,KeyType=HASH}],Projection={ProjectionType=ALL}" \
   --billing-mode PAY_PER_REQUEST \
   2>/dev/null || echo "Members table already exists"
 

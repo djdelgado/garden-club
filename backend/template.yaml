@@ -53,11 +53,22 @@ Resources:
           RequireSymbols: false
       AutoVerifiedAttributes:
         - email
+      # Server-side half of the invite flow: only admins create users, and the
+      # invite email carries the temporary password.
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+        InviteMessageTemplate:
+          EmailSubject: "You're invited to Garden Club"
+          EmailMessage: "Welcome to Garden Club! Your username is {username} and your temporary password is {####}. Sign in to complete your profile."
       Schema:
         - Name: email
           AttributeDataType: String
           Mutable: true
           Required: true
+      # NOTE: the app client declares no explicit Read/WriteAttributes, so the
+      # standard `name` attribute flows into the token on first sign-in. If anyone
+      # adds those lists, `name` MUST be included or the directory silently stops
+      # populating display names.
 
   GardenClubUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
@@ -129,9 +140,28 @@ Resources:
       AttributeDefinitions:
         - AttributeName: memberId
           AttributeType: S
+        - AttributeName: cognitoSub
+          AttributeType: S
+        - AttributeName: emailLower
+          AttributeType: S
       KeySchema:
         - AttributeName: memberId
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        # Resolves /members/me from the token sub without a scan.
+        - IndexName: CognitoSubIndex
+          KeySchema:
+            - AttributeName: cognitoSub
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        # Case-insensitive duplicate-email checks (replaces a scan filter).
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: emailLower
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
 
   # S3 Bucket
   ImagesBucket:
@@ -165,6 +195,22 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: !Ref Stage
+      # ⚠️ DefaultAuthorizer authenticates EVERY route on this API (/events,
+      # /images/*, /upload/*, /members/*). Callers must send the Cognito **ID**
+      # token — `audience` is the app client id, and access tokens carry `client_id`
+      # rather than `aud`, so they 401. CORS preflight is unaffected (HTTP API
+      # answers OPTIONS before authorization).
+      Auth:
+        Authorizers:
+          CognitoJwtAuthorizer:
+            IdentitySource: "$request.header.Authorization"
+            # JwtConfiguration is an OpenAPI passthrough — its keys are lowercase,
+            # unlike every other SAM property.
+            JwtConfiguration:
+              issuer: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${GardenClubUserPool}'
+              audience:
+                - !Ref GardenClubUserPoolClient
+        DefaultAuthorizer: CognitoJwtAuthorizer
       CorsConfiguration:
         AllowOrigins: !Ref CorsOrigins
         AllowHeaders:
@@ -243,9 +289,28 @@ Resources:
                 Action:
                   - cognito-idp:AdminCreateUser
                   - cognito-idp:AdminDeleteUser
+                  - cognito-idp:AdminGetUser
+                  - cognito-idp:AdminUpdateUserAttributes
                   - cognito-idp:AdminAddUserToGroup
+                  - cognito-idp:AdminRemoveUserFromGroup
                   - cognito-idp:ListUsers
                 Resource: !GetAtt GardenClubUserPool.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:DeleteObject
+                Resource: !Sub '${ImagesBucket.Arn}/members/*'
+              # ListBucket (needed to enumerate a member's prefix on delete) is a
+              # bucket-level action; scope it to the members/ prefix.
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt ImagesBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - 'members/*'
 
   ImagesLambdaRole:
     Type: AWS::IAM::Role
@@ -364,6 +429,24 @@ Resources:
             ApiId: !Ref GardenClubApi
             Path: /members
             Method: GET
+        GetMe:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /members/me
+            Method: GET
+        UpdateMe:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /members/me
+            Method: PUT
+        PresignMemberPhoto:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /members/me/photo
+            Method: POST
         CreateMember:
           Type: HttpApi
           Properties:
@@ -382,6 +465,12 @@ Resources:
             ApiId: !Ref GardenClubApi
             Path: /members/{memberId}
             Method: DELETE
+        ResendInvite:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /members/{memberId}/resend-invite
+            Method: POST
 
   ImagesFunction:
     Type: AWS::Serverless::Function

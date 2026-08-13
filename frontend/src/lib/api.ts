@@ -16,6 +16,9 @@ async function getApiInstance(): Promise<AxiosInstance> {
   apiInstance.interceptors.request.use(async (config) => {
     try {
       const session = await fetchAuthSession();
+      // Must be the ID token, not the access token: the API Gateway JWT authorizer's
+      // `audience` is the app client id, and only the ID token carries `aud`. Access
+      // tokens carry `client_id` instead and will 401 — do not "improve" this.
       const token = session.tokens?.idToken?.toString();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
