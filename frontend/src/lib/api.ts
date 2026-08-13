@@ -1,5 +1,5 @@
-import axios, { AxiosInstance } from "axios";
-import { fetchAuthSession } from "aws-amplify/auth";
+import axios, { AxiosError, AxiosInstance } from "axios";
+import { fetchAuthSession, signOut } from "aws-amplify/auth";
 import { API_BASE_URL } from "./constants";
 
 let apiInstance: AxiosInstance | null = null;
@@ -58,6 +58,34 @@ export function clearTokenCache(): void {
   inFlightTokenLookup = null;
 }
 
+// Concurrent calls on one page load can all 401 together; only tear the
+// session down once rather than racing several signOut()s and redirects.
+let handlingUnauthorized = false;
+
+async function handleUnauthorized(): Promise<void> {
+  if (handlingUnauthorized || typeof window === "undefined") {
+    return;
+  }
+  handlingUnauthorized = true;
+
+  clearTokenCache();
+  try {
+    await signOut();
+  } catch (error) {
+    // Already signed out, or Amplify can't reach Cognito. Redirect regardless —
+    // the local session is unusable either way.
+    console.error("Sign out after 401 failed:", error);
+  }
+
+  // Don't bounce a user who is already on the sign-in page; that would loop.
+  if (window.location.pathname.startsWith("/signin")) {
+    handlingUnauthorized = false;
+    return;
+  }
+
+  window.location.assign("/signin");
+}
+
 async function getApiInstance(): Promise<AxiosInstance> {
   if (apiInstance) {
     return apiInstance;
@@ -70,10 +98,27 @@ async function getApiInstance(): Promise<AxiosInstance> {
   apiInstance.interceptors.request.use(async (config) => {
     const token = await getAuthToken();
     if (token) {
+      // Must be the ID token, not the access token: the API Gateway JWT
+      // authorizer sets `audience` to the app client id, and Cognito puts that
+      // in `aud` only on ID tokens. An access token carries `client_id` instead
+      // and is rejected with a 401.
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   });
+
+  // Every route on the API now sits behind a Cognito JWT authorizer, so a 401
+  // means the session is gone rather than being a transient error. Send the
+  // user back to sign in instead of surfacing an opaque request failure.
+  apiInstance.interceptors.response.use(
+    (response) => response,
+    async (error: AxiosError) => {
+      if (error.response?.status === 401) {
+        await handleUnauthorized();
+      }
+      return Promise.reject(error);
+    }
+  );
 
   return apiInstance;
 }
