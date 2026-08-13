@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Note — two CLAUDE.md files exist.** There is a root [`CLAUDE.md`](../CLAUDE.md)
+> and this `.claude/CLAUDE.md`; both are loaded into context at the start of a
+> session. They overlap heavily and must be kept in sync — when you change
+> guidance here, mirror it in the root file (and vice versa). The root file
+> additionally documents the autonomous "dev team" **Agent Workflow**, which is
+> not duplicated here.
+
 ## Project Overview
 
 **Garden Club** is a full-stack web application for community garden club members to view events and browse photo galleries. Admins can create events and manage photos.
@@ -22,7 +29,8 @@ npm run local:down    # Tear down LocalStack
 ### Frontend (Next.js)
 ```bash
 npm run dev           # Start dev server (http://localhost:3000)
-npm run build         # Build for production
+npm run dev:remote    # Point .env.local at the deployed garden-club-dev stack, then dev (see below)
+npm run build         # Build static export (outputs to frontend/out/)
 npm run start         # Start production server
 npm run lint          # Run ESLint
 ```
@@ -54,27 +62,25 @@ Currently no test framework is set up. Tests would be added to:
 ### Frontend Architecture
 
 **Structure**: `frontend/src/`
-- `app/` — Next.js App Router (file-based routing)
+- `app/` — Next.js App Router (file-based routing). The app is a **static export** (`next.config.ts` sets `output: "export"`), so there are no server routes, API routes, or dynamic route segments.
   - `(app)/` — Protected routes (events, gallery, home) — require authentication
-  - `(app)/gallery/[folderName]/` — Dynamic route for per-folder image browsing
+  - `(app)/gallery/` — Single gallery page; per-folder browsing is driven by a `?folder=` query param via `useSearchParams()`, wrapped in `<Suspense>` (static export can't do dynamic `[folderName]` routes)
   - `(auth)/` — Public routes (signin, signup)
-  - `api/health/` — Next.js health check endpoint (used by ECS healthcheck)
-- `components/` — Reusable React components (events, gallery, layout)
+- `components/` — Reusable React components (events, gallery, layout). Note: `layout/AppShell.tsx` renders only `TopNav`; `layout/SideNav.tsx` is currently unused dead code.
 - `hooks/` — Custom React hooks (`useAuth.ts`, `useIsAdmin.ts`)
 - `lib/` — Utilities: Amplify config (`amplify.ts`), axios API client (`api.ts`), constants (`constants.ts`)
 - `services/` — Business-logic wrappers over `lib/api.ts` (`eventService.ts`, `imageService.ts`)
 - `types/` — TypeScript interfaces and types
 - `providers.tsx` — Client-side providers wrapper (Amplify, MUI theme)
 - `theme.ts` — Material UI theme configuration
-- `middleware.ts` — Route protection middleware (verifies Cognito auth)
 - `styles/` — Global CSS and Tailwind customizations
 
 **Key Patterns**:
 - **Route Groups**: `(app)` and `(auth)` organize public vs. protected routes
-- **Middleware Protection**: `middleware.ts` redirects unauthenticated users to sign-in
+- **Auth Guard**: There is **no `middleware.ts`** (removed in the static-export migration). Route protection is a client-side guard in `frontend/src/app/(app)/layout.tsx`, which calls `fetchAuthSession()` and redirects to `/signin` when there is no active session
 - **AWS Amplify Auth**: `aws-amplify` library + Cognito for authentication
 - **State**: React hooks + localStorage (no Redux/Zustand)
-- **Styling**: Material UI (component library) + Tailwind CSS (utility classes)
+- **Styling**: Material UI (component library) + Tailwind CSS (utility classes). MUI is **v9** — use the modern `<Grid size={{ xs: 12, sm: 6, ... }}>` API; there is no `Grid2`.
 - **Data Fetching**: axios for API calls
 
 ### Backend Architecture
@@ -116,7 +122,7 @@ Currently no test framework is set up. Tests would be added to:
 1. Create route file: `frontend/src/app/(app)/[route]/page.tsx`
 2. Add any components to `frontend/src/components/`
 3. If fetching data, add a service method to `frontend/src/services/` (which calls `lib/api.ts`)
-4. Ensure auth is enforced via middleware (already done for routes in `(app)`)
+4. Auth is enforced by the client-side guard in `(app)/layout.tsx`, so any route placed under `(app)/` is protected automatically
 
 ### Adding a New Backend Endpoint
 1. Create Lambda handler: `backend/functions/[feature]/handler.py`
@@ -138,16 +144,27 @@ Currently no test framework is set up. Tests would be added to:
 4. Edit files → frontend/backend auto-reload (next dev) or restart `sam local start-api`
 5. Open http://localhost:3000 and test
 
+#### Running against the deployed dev backend (`npm run dev:remote`)
+LocalStack Community does **not** include Cognito, so anything that exercises
+real authentication (sign-in, admin checks, JWTs) cannot be run against
+LocalStack. Use `npm run dev:remote` instead: it runs
+`scripts/setup-develop.sh`, which pulls the `garden-club-dev` CloudFormation
+stack outputs (API URL, User Pool ID, App Client ID, images bucket) into
+`frontend/.env.local` and then starts `npm run dev`. This requires configured
+AWS credentials with access to the `garden-club-dev` stack. Restart `npm run
+dev` after it writes `.env.local`, since Next.js only reads env files at
+startup.
+
 ### Deploying to AWS
 
 CI/CD is handled automatically via GitHub Actions on push to `develop` (dev) or `main` (prod):
 - **Backend** (`.github/workflows/deploy-backend.yml`): `sam build && sam deploy` using OIDC to assume an AWS role
-- **Frontend** (`.github/workflows/deploy-frontend.yml`): Docker image built and pushed to ECR, then deployed to ECS Express
+- **Frontend** (`.github/workflows/deploy-frontend.yml`): the frontend is a **static export** — `npm run build` produces `frontend/out/`, which is synced to an S3 bucket (`aws s3 sync ... --delete`), followed by a CloudFront cache invalidation. Uses OIDC to assume an AWS role; no Docker/ECR/ECS is involved.
 
 Manual deploy:
 1. **Backend**: `cd backend && sam deploy --guided`
-2. **Frontend**: Docker build from root `Dockerfile`, push to ECR, update ECS service
-3. `NEXT_PUBLIC_*` env vars are baked into the Docker image at build time (passed as `--build-arg`)
+2. **Frontend**: `cd frontend && npm run build`, then `aws s3 sync out/ s3://<bucket> --delete` and invalidate the CloudFront distribution
+3. `NEXT_PUBLIC_*` env vars are baked into the client bundle at build time (from GitHub Actions secrets scoped per environment)
 
 ## Important Implementation Details
 
@@ -155,25 +172,26 @@ Manual deploy:
 - **Sign-up**: User provides email/password → Cognito creates account → auto-verified (no email confirmation)
 - **Sign-in**: User provides email/password → Cognito returns JWT → Amplify stores in localStorage
 - **Admin Check**: Frontend checks Cognito groups; Backend checks JWT claims for group membership
-- **Middleware**: `middleware.ts` redirects unauthenticated requests to `/signin`
+- **Route Protection**: The client-side guard in `frontend/src/app/(app)/layout.tsx` redirects unauthenticated requests to `/signin` (there is no `middleware.ts`)
 
 ### CORS
 - API Gateway configured with CORS origin: `http://localhost:3000` (local) or production domain
 - Update in `backend/template.yaml` when deploying
 
 ### Environment Variables
-- **Frontend**: `.env.local` (created by `npm run local:up`) — key vars:
-  - `NEXT_PUBLIC_API_URL` — backend API Gateway URL
-  - `NEXT_PUBLIC_IMAGES_URL` — public S3 base URL for image display
+- **Frontend**: `.env.local` (created by `npm run local:up`, or by `npm run dev:remote` for the deployed dev stack). The names must match `frontend/src/lib/constants.ts`:
+  - `NEXT_PUBLIC_API_BASE_URL` — backend API base URL
+  - `NEXT_PUBLIC_IMAGES_BASE_URL` — public S3 base URL for image display
   - `NEXT_PUBLIC_AWS_REGION`
-  - `NEXT_PUBLIC_GOCNITO_USER_POOL_ID` — note: "GOCNITO" typo exists in codebase; keep consistent
-  - `NEXT_PUBLIC_GOCNITO_CLIENT_ID`
-- **Production**: `NEXT_PUBLIC_*` vars are stored as GitHub Actions secrets and baked into the Docker image at build time
+  - `NEXT_PUBLIC_COGNITO_USER_POOL_ID`
+  - `NEXT_PUBLIC_COGNITO_CLIENT_ID`
+- **Production**: `NEXT_PUBLIC_*` vars are stored as GitHub Actions secrets (scoped per environment) and baked into the static build at build time
 - **Backend**: `env.json` and `template.yaml` define Lambda environment variables
 - **Sensitive Data**: Never commit `.env.local` or credentials; `.env.local` is in `.gitignore`
 
 ### LocalStack Limitations
 - LocalStack emulates AWS services but isn't 100% feature-complete
+- **LocalStack Community has no Cognito**, so authentication cannot be exercised locally — use `npm run dev:remote` against the deployed `garden-club-dev` stack instead
 - If Lambda code uses AWS SDK features not in LocalStack, test in AWS
 - Common workarounds: check LocalStack docs or manually test in AWS
 
@@ -181,7 +199,7 @@ Manual deploy:
 
 ### Frontend won't load / auth error
 - Clear browser localStorage and cookies
-- Verify `.env.local` exists with correct Cognito IDs (from `npm run local:up`)
+- Verify `.env.local` exists with correct Cognito IDs (from `npm run local:up` or `npm run dev:remote`)
 - Check `frontend/src/lib/amplify.ts` config matches `.env.local`
 
 ### Backend API returns 500 error
