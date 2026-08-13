@@ -1,16 +1,16 @@
 "use client";
 
-import { Authenticator } from "@aws-amplify/ui-react";
-import "@aws-amplify/ui-react/styles.css";
-import { Box, CircularProgress, Container } from "@mui/material";
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Box, CircularProgress } from "@mui/material";
 
-function RedirectToHome() {
+// Public self-service signup is disabled — members are created by admins.
+// Redirect anyone landing on /signup to the sign-in page.
+export default function SignUpPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/home");
+    router.replace("/signin");
   }, [router]);
 
   return (
@@ -24,27 +24,5 @@ function RedirectToHome() {
     >
       <CircularProgress />
     </Box>
-  );
-}
-
-export default function SignUpPage() {
-  return (
-    <Container maxWidth="sm">
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <Box sx={{ width: "100%" }}>
-          <Authenticator>
-            {() => <RedirectToHome />}
-          </Authenticator>
-        </Box>
-      </Box>
-    </Container>
   );
 }
