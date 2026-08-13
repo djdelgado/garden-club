@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "aws-amplify/auth";
+import { clearTokenCache } from "@/lib/api";
 import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
 import EventIcon from "@mui/icons-material/Event";
 import { useAuth } from "@/hooks/useAuth";
@@ -43,6 +44,7 @@ export function SideNav() {
   const handleSignOut = async () => {
     try {
       await signOut();
+      clearTokenCache();
       router.push("/signin");
     } catch (error) {
       console.error("Sign out error:", error);

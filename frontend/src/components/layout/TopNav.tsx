@@ -9,11 +9,15 @@ import {
   Avatar,
   IconButton,
   Typography,
+  Menu,
+  MenuItem,
+  ListItemIcon,
 } from "@mui/material";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "aws-amplify/auth";
 import { useAuth } from "@/hooks/useAuth";
+import { clearTokenCache } from "@/lib/api";
 
 const NAV_LINKS = [
   { label: "Home", href: "/home" },
@@ -26,6 +30,16 @@ export function TopNav() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [initials, setInitials] = useState("");
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const menuOpen = Boolean(anchorEl);
+
+  const handleAvatarClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
 
   useEffect(() => {
     if (user) {
@@ -40,8 +54,10 @@ export function TopNav() {
   }, [user]);
 
   const handleSignOut = async () => {
+    handleMenuClose();
     try {
       await signOut();
+      clearTokenCache();
       router.push("/signin");
     } catch (error) {
       console.error("Sign out error:", error);
@@ -75,7 +91,7 @@ export function TopNav() {
             </div>
           </Typography>
         </Box>
-        <Box>
+
         {/* Nav links */}
         <Box sx={{ display: "flex", gap: 1, flex: 1 }}>
           {NAV_LINKS.map((link) => {
@@ -100,18 +116,38 @@ export function TopNav() {
           })}
         </Box>
 
-        {/* User avatar + sign out */}
+        {/* User avatar with dropdown */}
         {!loading && user && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Avatar sx={{ bgcolor: "primary.main", width: 34, height: 34, fontSize: 14 }}>
-              {initials}
-            </Avatar>
-            <IconButton onClick={handleSignOut} size="small" title="Sign out" color="inherit">
-              <LogoutIcon fontSize="small" />
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <IconButton
+              onClick={handleAvatarClick}
+              size="small"
+              aria-label="Account menu"
+              aria-controls={menuOpen ? "account-menu" : undefined}
+              aria-haspopup="true"
+              aria-expanded={menuOpen ? "true" : undefined}
+            >
+              <Avatar sx={{ bgcolor: "primary.main", width: 34, height: 34, fontSize: 14 }}>
+                {initials}
+              </Avatar>
             </IconButton>
+            <Menu
+              id="account-menu"
+              anchorEl={anchorEl}
+              open={menuOpen}
+              onClose={handleMenuClose}
+              anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+              transformOrigin={{ vertical: "top", horizontal: "right" }}
+            >
+              <MenuItem onClick={handleSignOut}>
+                <ListItemIcon>
+                  <LogoutIcon fontSize="small" />
+                </ListItemIcon>
+                Log out
+              </MenuItem>
+            </Menu>
           </Box>
         )}
-        </Box>
       </Toolbar>
     </AppBar>
   );
