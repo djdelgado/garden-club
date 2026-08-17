@@ -17,18 +17,26 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "aws-amplify/auth";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { clearTokenCache } from "@/lib/api";
 
-const NAV_LINKS = [
+const BASE_LINKS = [
   { label: "Home", href: "/home" },
   { label: "Events", href: "/events" },
   { label: "Gallery", href: "/gallery" },
 ];
 
+const ADMIN_LINKS = [{ label: "Members", href: "/admin/members" }];
+
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
+
+  // Gate on !adminLoading so the admin link never flashes before the group
+  // check resolves.
+  const navLinks = isAdmin && !adminLoading ? [...BASE_LINKS, ...ADMIN_LINKS] : BASE_LINKS;
   const [initials, setInitials] = useState("");
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const menuOpen = Boolean(anchorEl);
@@ -94,7 +102,7 @@ export function TopNav() {
 
         {/* Nav links */}
         <Box sx={{ display: "flex", gap: 1, flex: 1 }}>
-          {NAV_LINKS.map((link) => {
+          {navLinks.map((link) => {
             const active = pathname.startsWith(link.href);
             return (
               <Button
