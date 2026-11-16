@@ -78,10 +78,11 @@ def complete_upload(image_ids: list) -> Dict[str, Any]:
     """POST /upload/complete - Mark uploads as READY"""
     try:
         for image_id in image_ids:
+            # Mark READY and drop the TTL so the item is no longer expirable.
             images_table.update_item(
                 Key={"imageId": image_id},
-                UpdateExpression="SET #s = :val",
-                ExpressionAttributeNames={"#s": "status"},
+                UpdateExpression="SET #s = :val REMOVE #ttl",
+                ExpressionAttributeNames={"#s": "status", "#ttl": "ttl"},
                 ExpressionAttributeValues={":val": "READY"},
             )
         return format_response(200, {"updated": len(image_ids)})
@@ -123,7 +124,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Check if folder already has images
         user_id = get_user_id(event)
-        now = datetime.now(timezone.utc).isoformat()
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat()
+        # PENDING items expire after 24h via DynamoDB TTL; complete_upload
+        # removes this so READY items are never collected.
+        ttl = int((now_dt + timedelta(hours=24)).timestamp())
 
         images_response = images_table.query(
             IndexName="FolderNameIndex",
@@ -135,45 +140,48 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         upload_results = []
 
-        for idx, file_obj in enumerate(files):
-            file_name = file_obj.get("fileName")
-            content_type = file_obj.get("contentType")
+        with images_table.batch_writer() as batch:
+            for idx, file_obj in enumerate(files):
+                file_name = file_obj.get("fileName")
+                content_type = file_obj.get("contentType")
 
-            if not file_name:
-                continue
+                if not file_name:
+                    continue
 
-            # Generate S3 key and image ID
-            image_id = str(uuid4())
-            s3_key = f"{folder_name}/{image_id}/{file_name}"
+                # Generate S3 key and image ID
+                image_id = str(uuid4())
+                s3_key = f"{folder_name}/{image_id}/{file_name}"
 
-            # Only mark first image as thumbnail if folder is empty
-            is_thumbnail = (idx == 0 and not folder_has_images)
+                # Only mark first image as thumbnail if folder is empty
+                is_thumbnail = (idx == 0 and not folder_has_images)
 
-            # Generate presigned URL with short expiration (STS token expires after ~1h)
-            upload_url = generate_presigned_url(images_bucket, s3_key, content_type, expiration=60)
+                # Presigned URL valid for 15 minutes so large batches that
+                # start late (browser caps ~6 concurrent PUTs) don't 403.
+                upload_url = generate_presigned_url(images_bucket, s3_key, content_type, expiration=900)
 
-            # Store image metadata in DynamoDB
-            image_item: ImageItem = {
-                "imageId": image_id,
-                "folderName": folder_name,
-                "s3Key": s3_key,
-                "fileName": file_name,
-                "uploadedAt": now,
-                "uploadedBy": user_id,
-                "isThumbnail": is_thumbnail,
-                "status": "PENDING",
-            }
+                # Store image metadata in DynamoDB
+                image_item: ImageItem = {
+                    "imageId": image_id,
+                    "folderName": folder_name,
+                    "s3Key": s3_key,
+                    "fileName": file_name,
+                    "uploadedAt": now,
+                    "uploadedBy": user_id,
+                    "isThumbnail": is_thumbnail,
+                    "status": "PENDING",
+                    "ttl": ttl,
+                }
 
-            images_table.put_item(Item=image_item)
+                batch.put_item(Item=image_item)
 
-            result: PresignedUploadResult = {
-                "fileName": file_name,
-                "imageId": image_id,
-                "uploadUrl": upload_url,
-                "imageKey": s3_key,
-                "isThumbnail": is_thumbnail,
-            }
-            upload_results.append(result)
+                result: PresignedUploadResult = {
+                    "fileName": file_name,
+                    "imageId": image_id,
+                    "uploadUrl": upload_url,
+                    "imageKey": s3_key,
+                    "isThumbnail": is_thumbnail,
+                }
+                upload_results.append(result)
 
         return format_response(
             200,
