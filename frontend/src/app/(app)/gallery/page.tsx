@@ -165,6 +165,10 @@ function AlbumDetail({ folderName }: { folderName: string }) {
     return router.push("/gallery");
   };
 
+  const handleImageDeleted = (imageId: string) => {
+    setImages((prev) => prev.filter((image) => image.imageId !== imageId));
+  };
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
@@ -191,7 +195,7 @@ function AlbumDetail({ folderName }: { folderName: string }) {
               ))}
           </ImageList>
         ) : (
-          <ImageGrid images={images} />
+          <ImageGrid images={images} onImageDeleted={handleImageDeleted} />
         )}
       </Box>
     </Container>

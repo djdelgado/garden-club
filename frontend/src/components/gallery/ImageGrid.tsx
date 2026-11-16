@@ -10,13 +10,14 @@ import { useGalleryColumns } from "@/hooks/useGalleryColumns";
 
 interface ImageGridProps {
   images: GardenImage[];
+  onImageDeleted?: (imageId: string) => void;
 }
 
 export function imageSrc(image: GardenImage): string {
   return image.imageUrl ?? `${IMAGES_BASE_URL}/${image.s3Key}`;
 }
 
-export function ImageGrid({ images }: ImageGridProps) {
+export function ImageGrid({ images, onImageDeleted }: ImageGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const cols = useGalleryColumns();
 
@@ -64,6 +65,7 @@ export function ImageGrid({ images }: ImageGridProps) {
           index={selectedIndex}
           onNavigate={setSelectedIndex}
           onClose={() => setSelectedIndex(null)}
+          onDeleted={onImageDeleted}
         />
       )}
     </>

@@ -1,12 +1,15 @@
 "use client";
 
-import { Modal, Box, IconButton, Typography } from "@mui/material";
+import { useCallback, useEffect, useState } from "react";
+import { Modal, Box, IconButton, Typography, Button, Alert } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { GardenImage } from "@/types/image";
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { ImageService } from "@/services/imageService";
 import { imageSrc } from "./ImageGrid";
 
 interface ImageModalProps {
@@ -14,6 +17,7 @@ interface ImageModalProps {
   index: number;
   onNavigate: (index: number) => void;
   onClose: () => void;
+  onDeleted?: (imageId: string) => void;
 }
 
 export function ImageModal({
@@ -21,6 +25,7 @@ export function ImageModal({
   index,
   onNavigate,
   onClose,
+  onDeleted,
 }: ImageModalProps) {
   const image = images[index];
   const hasPrev = index > 0;
@@ -62,6 +67,34 @@ export function ImageModal({
       }
     });
   }, [images, index]);
+
+    const { isAdmin } = useIsAdmin();
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset the delete confirmation when stepping to another image.
+  useEffect(() => {
+    setConfirming(false);
+    setError(null);
+  }, [image?.imageId]);
+
+  const handleDelete = async () => {
+    if (!image) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await ImageService.deleteImage(image.imageId);
+      onDeleted?.(image.imageId);
+      // The parent drops the image from `images`, so this index may now be
+      // stale; close rather than guess which neighbour to show.
+      onClose();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to delete image. Please try again.");
+      setDeleting(false);
+    }
+  };
 
   if (!image) return null;
 
@@ -168,6 +201,65 @@ export function ImageModal({
           >
             {image.fileName}
           </Typography>
+
+          {isAdmin && (
+            <Box sx={{ mt: 2 }}>
+              {error && (
+                <Alert severity="error" sx={{ mb: 1 }}>
+                  {error}
+                </Alert>
+              )}
+              {confirming ? (
+                <Box
+                  sx={{
+                    display: "flex",
+                    gap: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Typography variant="body2" sx={{ color: "white" }}>
+                    Delete this image?
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    size="small"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                  >
+                    {deleting ? "Deleting…" : "Confirm"}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="inherit"
+                    size="small"
+                    onClick={() => setConfirming(false)}
+                    disabled={deleting}
+                    sx={{ color: "white", borderColor: "rgba(255,255,255,0.5)" }}
+                  >
+                    Cancel
+                  </Button>
+                </Box>
+              ) : (
+                <Box sx={{ display: "flex", justifyContent: "center" }}>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => {
+                      setError(null);
+                      setConfirming(true);
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          )}
         </Box>
       </Box>
     </Modal>

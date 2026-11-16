@@ -48,6 +48,10 @@ export const ImageService = {
     clearCache();
   },
 
+  deleteImage: async (imageId: string) => {
+    await apiDelete(`${IMAGE_PATH}/${encodeURIComponent(imageId)}`);
+  },
+
   presignUpload: async (folderName: string, files: { fileName: string; contentType?: string }[]) => {
     const response = await apiPost<{
       uploads: { uploadUrl: string; imageKey: string; fileName: string; imageId: string }[];
