@@ -220,7 +220,7 @@ def create_event(body: str, user_id: str) -> Dict[str, Any]:
         return format_response(500, {"error": str(err)})
 
 
-def update_event(event_id: str, body: str) -> Dict[str, Any]:
+def update_event(event_id: str, body: str, event: Dict[str, Any]) -> Dict[str, Any]:
     """PUT /events/{id} - Update event"""
     try:
         data = json.loads(body)
@@ -230,10 +230,13 @@ def update_event(event_id: str, body: str) -> Dict[str, Any]:
             return format_response(404, {"error": "Event not found"})
 
         existing_item = response["Item"]
+        # Never let a client overwrite the RSVP set through PUT.
+        data.pop("rsvps", None)
         existing_item.update(data)
 
         events_table.put_item(Item=existing_item)
-        return format_response(200, existing_item)
+        # Strip the raw set (not JSON serialisable) the same way GET does.
+        return format_response(200, with_rsvp_summary(existing_item, caller_member_id(event)))
     except Exception as err:
         logger.exception(f"Error updating event {event_id}")
         return format_response(500, {"error": str(err)})
@@ -345,7 +348,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         elif method == "PUT":
             event_id = path.split("/")[-1]
-            return update_event(event_id, body)
+            return update_event(event_id, body, event)
 
         elif method == "DELETE":
             event_id = path.split("/")[-1]

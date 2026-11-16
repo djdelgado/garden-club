@@ -11,6 +11,8 @@ import {
   Box,
   Chip,
   Stack,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
@@ -19,17 +21,45 @@ import Image from "next/image";
 import { Event, RsvpSummary } from "@/types/event";
 import { EventService } from "@/services/eventService";
 import { IMAGES_BASE_URL } from "@/lib/constants";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 interface EventDetailModalProps {
   event: Event | null;
   onClose: () => void;
+  // Admin actions. Optional so read-only consumers (e.g. the home-page
+  // upcoming-events strip) can render the modal without wiring them up.
+  onEdit?: (event: Event) => void;
+  onDeleted?: () => void;
   onRsvpChange?: (eventId: string, summary: RsvpSummary) => void;
 }
 
-export function EventDetailModal({ event, onClose, onRsvpChange }: EventDetailModalProps) {
+export function EventDetailModal({
+  event,
+  onClose,
+  onEdit,
+  onDeleted,
+  onRsvpChange,
+}: EventDetailModalProps) {
+  const { isAdmin } = useIsAdmin();
   const [pending, setPending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!event) return null;
+
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this event?")) return;
+    try {
+      setDeleting(true);
+      setError(null);
+      await EventService.deleteEvent(event.eventId);
+      onDeleted?.();
+    } catch {
+      setError("Failed to delete event. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const startDate = new Date(event.startTime);
   const endDate = new Date(event.endTime);
@@ -107,18 +137,37 @@ export function EventDetailModal({ event, onClose, onRsvpChange }: EventDetailMo
               </Stack>
             )}
           </Box>
+          {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
         </Box>
       </DialogContent>
       <DialogActions>
+        {isAdmin && onEdit && onDeleted && (
+          <>
+            <Button
+              color="error"
+              onClick={handleDelete}
+              disabled={deleting}
+              startIcon={deleting ? <CircularProgress size={18} /> : undefined}
+              sx={{ mr: "auto" }}
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </Button>
+            <Button onClick={() => onEdit(event)} disabled={deleting}>
+              Edit
+            </Button>
+          </>
+        )}
         <Button
           variant={event.isAttending ? "contained" : "outlined"}
           color="primary"
-          disabled={pending || isPast}
+          disabled={pending || deleting || isPast}
           onClick={handleRsvpToggle}
         >
           {isPast ? "Event ended" : event.isAttending ? "Going" : "I'm going"}
         </Button>
-        <Button onClick={onClose}>Close</Button>
+        <Button onClick={onClose} disabled={deleting}>
+          Close
+        </Button>
       </DialogActions>
     </Dialog>
   );
