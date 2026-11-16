@@ -30,6 +30,7 @@ Globals:
       Variables:
         EVENTS_TABLE_NAME: !Ref EventsTable
         IMAGES_TABLE_NAME: !Ref ImagesTable
+        FOLDERS_TABLE_NAME: !Ref FoldersTable
         MEMBERS_TABLE_NAME: !Ref MembersTable
         IMAGES_BUCKET_NAME: !Ref ImagesBucket
         # CloudFront domain fronting the images bucket. Image handlers build
@@ -136,6 +137,25 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+      # Abandoned PENDING uploads carry a `ttl` epoch and are auto-expired;
+      # completing an upload removes `ttl` so READY items persist.
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # Per-folder metadata (imageCount, thumbnailKey) maintained incrementally so
+  # listing albums is O(folders) instead of a full scan of the images table.
+  FoldersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'GardenClubFolders-${Stage}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: folderName
+          AttributeType: S
+      KeySchema:
+        - AttributeName: folderName
+          KeyType: HASH
 
   MembersTable:
     Type: AWS::DynamoDB::Table
@@ -403,9 +423,11 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:DeleteItem
                   - dynamodb:UpdateItem
+                  - dynamodb:GetItem
                 Resource:
                   - !GetAtt ImagesTable.Arn
                   - !Sub '${ImagesTable.Arn}/index/*'
+                  - !GetAtt FoldersTable.Arn
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -441,6 +463,7 @@ Resources:
                 Resource:
                   - !GetAtt ImagesTable.Arn
                   - !Sub '${ImagesTable.Arn}/index/*'
+                  - !GetAtt FoldersTable.Arn
 
   # Lambda Functions
   EventsFunction:

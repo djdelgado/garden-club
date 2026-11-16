@@ -34,7 +34,14 @@ export const ImageService = {
 
   presignUpload: async (folderName: string, files: { fileName: string; contentType?: string }[]) => {
     const response = await apiPost<{
-      uploads: { uploadUrl: string; imageKey: string; fileName: string; imageId: string }[];
+      uploads: {
+        uploadUrl: string;
+        imageKey: string;
+        thumbUploadUrl: string;
+        thumbKey: string;
+        fileName: string;
+        imageId: string;
+      }[];
     }>(`${UPLOAD_PATH}/presign`, { folderName, files });
     return response.uploads;
   },
@@ -44,16 +51,22 @@ export const ImageService = {
 		await apiPost(`${UPLOAD_PATH}/complete`, { imageIds });
 	},
     
-	uploadToS3: async (uploadUrl: string, file: File, contentType?: string) => {
-		// The presigned PUT signs Cache-Control (see backend upload handler), so
-		// this value must match IMAGE_CACHE_CONTROL exactly or S3 rejects the PUT.
-		await fetch(uploadUrl, {
+	uploadToS3: async (uploadUrl: string, file: Blob, contentType?: string) => {
+		// fetch only rejects on network errors, so a 403 (expired URL) or 5xx
+		// resolves normally. Check res.ok so the caller can detect failures and
+		// avoid marking a never-uploaded object READY.
+		const res = await fetch(uploadUrl, {
 			method: "PUT",
 			body: file,
+			// The presigned PUT signs Cache-Control (see backend upload handler), so
+			// this value must match IMAGE_CACHE_CONTROL exactly or S3 rejects the PUT.
 			headers: {
 				"Cache-Control": "public, max-age=31536000, immutable",
 				...(contentType ? { "Content-Type": contentType } : {}),
 			},
-			});
+		});
+		if (!res.ok) {
+			throw new Error(`Upload failed (${res.status})`);
+		}
 	},
 };
