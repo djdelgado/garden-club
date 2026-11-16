@@ -14,6 +14,18 @@ class ImageItem(TypedDict):
     status: str
 
 
+class FolderItem(TypedDict):
+    """Folder metadata item stored in GardenClubFolders table.
+
+    Maintained incrementally (upload/complete, delete_image, delete_folder,
+    update_folder_name) so folder listing is O(folders), not a scan of every
+    image. `imageCount` tracks READY images only.
+    """
+    folderName: str
+    imageCount: int
+    thumbnailKey: NotRequired[str]
+
+
 class FolderMetadata(TypedDict):
     """Folder info returned in get_all_folders"""
     folderName: str
