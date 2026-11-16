@@ -24,6 +24,7 @@ const BASE_LINKS = [
   { label: "Home", href: "/home" },
   { label: "Events", href: "/events" },
   { label: "Gallery", href: "/gallery" },
+  { label: "Directory", href: "/directory" },
 ];
 
 const ADMIN_LINKS = [{ label: "Members", href: "/admin/members" }];
