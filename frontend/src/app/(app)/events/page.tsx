@@ -24,6 +24,7 @@ export default function EventsPage() {
   const [error, setError] = useState<string | null>(null);
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [editEvent, setEditEvent] = useState<Event | null>(null);
   const showSkeleton = useDelayedFlag(loading);
 
   useEffect(() => {
@@ -48,6 +49,16 @@ export default function EventsPage() {
   const handleEventClick = (eventId: string) => {
     const event = events.find((e) => e.eventId === eventId) ?? null;
     setSelectedEvent(event);
+  };
+
+  const handleEditEvent = (event: Event) => {
+    setSelectedEvent(null);
+    setEditEvent(event);
+  };
+
+  const handleEventDeleted = () => {
+    setSelectedEvent(null);
+    loadEvents();
   };
 
   return (
@@ -103,8 +114,19 @@ export default function EventsPage() {
             <CreateEventModal
               open={openCreateModal}
               onClose={() => setOpenCreateModal(false)}
-              onEventCreated={() => {
+              onEventSaved={() => {
                 setOpenCreateModal(false);
+                loadEvents();
+              }}
+            />
+
+            <CreateEventModal
+              open={!!editEvent}
+              isEdit
+              event={editEvent}
+              onClose={() => setEditEvent(null)}
+              onEventSaved={() => {
+                setEditEvent(null);
                 loadEvents();
               }}
             />
@@ -114,6 +136,8 @@ export default function EventsPage() {
         <EventDetailModal
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
+          onEdit={handleEditEvent}
+          onDeleted={handleEventDeleted}
         />
       </Box>
     </Container>
