@@ -18,6 +18,7 @@ import {
 } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { ImageService } from "@/services/imageService";
+import { processImage } from "@/lib/imageResize";
 import { DeleteAlbumBtn } from "./DeleteAlbumBtn";
 
 interface CreateAlbumDialogProps {
@@ -116,15 +117,33 @@ export function CreateAlbumDialog({
   };
 
   const uploadImages = async() => {
+    // Resize/compress each file in the browser, producing an original + thumb
+    // variant before uploading (see lib/imageResize).
+    const processed = await Promise.all(files.map((f) => processImage(f)));
+
     const uploads = await ImageService.presignUpload(
       folderName.trim(),
-      files.map((f) => ({ fileName: f.name, contentType: f.type }))
+      processed.map((p, idx) => ({
+        fileName: files[idx].name,
+        contentType: p.contentType,
+      }))
     );
 
+    // PUT both variants per file. If any upload rejects, Promise.all rejects and
+    // completeUpload is skipped, so the item stays PENDING and never appears.
     await Promise.all(
-      uploads.map((upload, idx) =>
-        ImageService.uploadToS3(upload.uploadUrl, files[idx], files[idx].type)
-      )
+      uploads.flatMap((upload, idx) => [
+        ImageService.uploadToS3(
+          upload.uploadUrl,
+          processed[idx].original,
+          processed[idx].contentType
+        ),
+        ImageService.uploadToS3(
+          upload.thumbUploadUrl,
+          processed[idx].thumb,
+          processed[idx].contentType
+        ),
+      ])
     );
 
     await ImageService.completeUpload(uploads.map((u) => u.imageId));

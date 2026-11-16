@@ -33,6 +33,15 @@ def format_response(status_code: int, body: Any) -> Dict[str, Any]:
     }
 
 
+def presign_get(s3_key: str) -> str:
+    """Generate a presigned GET URL for an object (valid for 1 hour)"""
+    return s3_client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": images_bucket, "Key": s3_key},
+        ExpiresIn=3600,
+    )
+
+
 def get_query_params(event: Dict[str, Any]) -> Dict[str, str]:
     """Extract query parameters from the event"""
     query_string = event.get("rawQueryString", "")
@@ -65,17 +74,12 @@ def get_all_folders() -> Dict[str, Any]:
 
                 folders_dict[folder_name]["imageCount"] += 1
 
-                # Use first image marked as thumbnail
+                # Use first image marked as thumbnail. Prefer the small thumb
+                # variant, falling back to the original for pre-existing images.
                 if item.get("isThumbnail") and "thumbnailUrl" not in folders_dict[folder_name]:
-                    s3_key = item.get("s3Key")
-                    if s3_key:
-                        # Generate presigned URL for thumbnail (valid for 1 hour)
-                        thumbnail_url = s3_client.generate_presigned_url(
-                            "get_object",
-                            Params={"Bucket": images_bucket, "Key": s3_key},
-                            ExpiresIn=3600,
-                        )
-                        folders_dict[folder_name]["thumbnailUrl"] = thumbnail_url
+                    cover_key = item.get("thumbKey") or item.get("s3Key")
+                    if cover_key:
+                        folders_dict[folder_name]["thumbnailUrl"] = presign_get(cover_key)
 
         folders = list(folders_dict.values())
         return format_response(200, {"folders": folders})
@@ -109,11 +113,11 @@ def get_images_by_folder(folder_name: str) -> Dict[str, Any]:
         for item in items:
             s3_key = item.get("s3Key")
             if s3_key:
-                item["imageUrl"] = s3_client.generate_presigned_url(
-                    "get_object",
-                    Params={"Bucket": images_bucket, "Key": s3_key},
-                    ExpiresIn=3600,
-                )
+                item["imageUrl"] = presign_get(s3_key)
+            # Thumbnail for grid rendering; fall back to the original for images
+            # uploaded before thumbnails existed.
+            thumb_key = item.get("thumbKey")
+            item["thumbUrl"] = presign_get(thumb_key) if thumb_key else item.get("imageUrl")
         return format_response(200, {"images": items})
     except Exception as err:
         logger.exception(f"Error getting images for folder {folder_name}")
@@ -130,11 +134,14 @@ def delete_image(image_id: str) -> Dict[str, Any]:
 
         item: ImageItem = response["Item"]
         s3_key = item.get("s3Key")
+        thumb_key = item.get("thumbKey")
         folder_name = item.get("folderName")
         is_thumbnail = item.get("isThumbnail", False)
 
         if s3_key:
             s3_client.delete_object(Bucket=images_bucket, Key=s3_key)
+        if thumb_key:
+            s3_client.delete_object(Bucket=images_bucket, Key=thumb_key)
 
         images_table.delete_item(Key={"imageId": image_id})
 
@@ -204,8 +211,11 @@ def delete_folder(folder_name: str) -> Dict[str, Any]:
         for item in items:
             image_id = item["imageId"]
             s3_key = item.get("s3Key")
+            thumb_key = item.get("thumbKey")
             if s3_key:
                 s3_client.delete_object(Bucket=images_bucket, Key=s3_key)
+            if thumb_key:
+                s3_client.delete_object(Bucket=images_bucket, Key=thumb_key)
             images_table.delete_item(Key={"imageId": image_id})
 
         return format_response(204, {})

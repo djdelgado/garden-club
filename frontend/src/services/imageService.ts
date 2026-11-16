@@ -30,17 +30,24 @@ export const ImageService = {
 
   presignUpload: async (folderName: string, files: { fileName: string; contentType?: string }[]) => {
     const response = await apiPost<{
-      uploads: { uploadUrl: string; imageKey: string; fileName: string; imageId: string }[];
+      uploads: {
+        uploadUrl: string;
+        imageKey: string;
+        thumbUploadUrl: string;
+        thumbKey: string;
+        fileName: string;
+        imageId: string;
+      }[];
     }>(`${UPLOAD_PATH}/presign`, { folderName, files });
     return response.uploads;
   },
 
-  
+
   completeUpload: async (imageIds: string[]) => {
 		await apiPost(`${UPLOAD_PATH}/complete`, { imageIds });
 	},
-    
-	uploadToS3: async (uploadUrl: string, file: File, contentType?: string) => {
+
+	uploadToS3: async (uploadUrl: string, file: Blob, contentType?: string) => {
 		await fetch(uploadUrl, {
 			method: "PUT",
 			body: file,

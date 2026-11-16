@@ -142,21 +142,26 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if not file_name:
                 continue
 
-            # Generate S3 key and image ID
+            # Generate S3 keys and image ID. The thumbnail variant lives under a
+            # `/thumb/` segment of the same imageId prefix so folder/image delete
+            # (which operates on the shared prefix) can clean both up.
             image_id = str(uuid4())
             s3_key = f"{folder_name}/{image_id}/{file_name}"
+            thumb_key = f"{folder_name}/{image_id}/thumb/{file_name}"
 
             # Only mark first image as thumbnail if folder is empty
             is_thumbnail = (idx == 0 and not folder_has_images)
 
-            # Generate presigned URL with short expiration (STS token expires after ~1h)
+            # Generate presigned URLs with short expiration (STS token expires after ~1h)
             upload_url = generate_presigned_url(images_bucket, s3_key, content_type, expiration=60)
+            thumb_upload_url = generate_presigned_url(images_bucket, thumb_key, content_type, expiration=60)
 
             # Store image metadata in DynamoDB
             image_item: ImageItem = {
                 "imageId": image_id,
                 "folderName": folder_name,
                 "s3Key": s3_key,
+                "thumbKey": thumb_key,
                 "fileName": file_name,
                 "uploadedAt": now,
                 "uploadedBy": user_id,
@@ -171,6 +176,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "imageId": image_id,
                 "uploadUrl": upload_url,
                 "imageKey": s3_key,
+                "thumbUploadUrl": thumb_upload_url,
+                "thumbKey": thumb_key,
                 "isThumbnail": is_thumbnail,
             }
             upload_results.append(result)
