@@ -17,28 +17,6 @@ services:
     networks:
       - localstack_default
 
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # These are read from .env.local (created by `npm run local:up`).
-        # Run `npm run local:up` first so the file exists, then `docker compose up frontend`.
-        # Names must match frontend/src/lib/constants.ts exactly.
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3001}
-        NEXT_PUBLIC_IMAGES_BASE_URL: ${NEXT_PUBLIC_IMAGES_BASE_URL:-https://s3.localhost.localstack.cloud:4566/garden-club-images}
-        NEXT_PUBLIC_AWS_REGION: ${NEXT_PUBLIC_AWS_REGION:-us-east-1}
-        NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${NEXT_PUBLIC_COGNITO_USER_POOL_ID}
-        NEXT_PUBLIC_COGNITO_CLIENT_ID: ${NEXT_PUBLIC_COGNITO_CLIENT_ID}
-    image: garden-club-frontend:local
-    container_name: garden-club-frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - localstack
-    networks:
-      - localstack_default
-
 volumes:
   localstack_data:
 
