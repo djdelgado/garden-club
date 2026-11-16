@@ -16,6 +16,14 @@ const THUMB_QUALITY = 0.8;
 // (e.g. GIF, HEIC) is passed through untouched so uploads never break.
 const RESIZABLE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
+/**
+ * Content type `processImage` will produce for this file. Presigned PUT URLs
+ * sign the Content-Type, so the presign request must use this, not `file.type`.
+ */
+export function outputContentType(file: File): string {
+  return RESIZABLE_TYPES.includes(file.type) ? "image/jpeg" : file.type;
+}
+
 export interface ProcessedImage {
   original: Blob;
   thumb: Blob;

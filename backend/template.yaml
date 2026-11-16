@@ -131,6 +131,11 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+      # Abandoned PENDING uploads carry a `ttl` epoch and are auto-expired;
+      # completing an upload removes `ttl` so READY items persist.
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
 
   MembersTable:
     Type: AWS::DynamoDB::Table
