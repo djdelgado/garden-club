@@ -23,8 +23,10 @@ import { EventService } from "@/services/eventService";
 interface EventDetailModalProps {
   event: Event | null;
   onClose: () => void;
-  onEdit: (event: Event) => void;
-  onDeleted: () => void;
+  // Admin actions. Optional so read-only consumers (e.g. the home-page
+  // upcoming-events strip) can render the modal without wiring them up.
+  onEdit?: (event: Event) => void;
+  onDeleted?: () => void;
 }
 
 export function EventDetailModal({
@@ -45,7 +47,7 @@ export function EventDetailModal({
       setDeleting(true);
       setError(null);
       await EventService.deleteEvent(event.eventId);
-      onDeleted();
+      onDeleted?.();
     } catch {
       setError("Failed to delete event. Please try again.");
     } finally {
@@ -99,7 +101,7 @@ export function EventDetailModal({
         </Box>
       </DialogContent>
       <DialogActions>
-        {isAdmin && (
+        {isAdmin && onEdit && onDeleted && (
           <>
             <Button
               color="error"

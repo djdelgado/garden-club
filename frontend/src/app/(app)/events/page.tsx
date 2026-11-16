@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useMemo, useState, useEffect } from "react";
 import {
   Box,
   Container,
   Typography,
   Alert,
   Fab,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { EventService } from "@/services/eventService";
@@ -17,7 +20,13 @@ import { EventList } from "@/components/events/EventList";
 import { CreateEventModal } from "@/components/events/CreateEventModal";
 import { EventDetailModal } from "@/components/events/EventDetailModal";
 
-export default function EventsPage() {
+type EventView = "upcoming" | "past";
+
+function EventsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const view: EventView = searchParams.get("view") === "past" ? "past" : "upcoming";
+
   const { isAdmin } = useIsAdmin();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,9 +43,7 @@ export default function EventsPage() {
   const loadEvents = async () => {
     try {
       setLoading(true);
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const data = await EventService.getEvents(startOfDay.toISOString());
+      const data = await EventService.getEvents();
       setEvents(data);
     } catch (err) {
       setError("Failed to load events");
@@ -45,6 +52,19 @@ export default function EventsPage() {
       setLoading(false);
     }
   };
+
+  const { upcoming, past } = useMemo(() => {
+    const now = new Date().toISOString();
+    const upcoming = events
+      .filter((e) => e.startTime >= now)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const past = events
+      .filter((e) => e.startTime < now)
+      .sort((a, b) => b.startTime.localeCompare(a.startTime));
+    return { upcoming, past };
+  }, [events]);
+
+  const visibleEvents = view === "past" ? past : upcoming;
 
   const handleEventClick = (eventId: string) => {
     const event = events.find((e) => e.eventId === eventId) ?? null;
@@ -61,14 +81,51 @@ export default function EventsPage() {
     loadEvents();
   };
 
+  const handleViewChange = (
+    _event: React.MouseEvent<HTMLElement>,
+    nextView: EventView | null
+  ) => {
+    if (!nextView) return;
+    router.push(nextView === "past" ? "/events?view=past" : "/events");
+  };
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
-        <Box sx={{ mb: 4 }}>
-          <Typography sx={{ fontSize: "0.75rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "primary.main", mb: 0.5 }}>
-            What&apos;s Growing
-          </Typography>
-          <Typography variant="h3" sx={{ fontStyle: "italic" }}>Upcoming Events</Typography>
+        <Box
+          sx={{
+            mb: 4,
+            display: "flex",
+            alignItems: { xs: "flex-start", sm: "flex-end" },
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 2,
+          }}
+        >
+          <Box>
+            <Typography sx={{ fontSize: "0.75rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "primary.main", mb: 0.5 }}>
+              What&apos;s Growing
+            </Typography>
+            <Typography variant="h3" sx={{ fontStyle: "italic" }}>
+              {view === "past" ? "Past Events" : "Upcoming Events"}
+            </Typography>
+          </Box>
+
+          <ToggleButtonGroup
+            value={view}
+            exclusive
+            onChange={handleViewChange}
+            size="small"
+            color="primary"
+            aria-label="event view"
+          >
+            <ToggleButton value="upcoming" aria-label="upcoming events">
+              Upcoming
+            </ToggleButton>
+            <ToggleButton value="past" aria-label="past events">
+              Past
+            </ToggleButton>
+          </ToggleButtonGroup>
         </Box>
 
         {error && (
@@ -84,13 +141,13 @@ export default function EventsPage() {
               loading={showSkeleton}
               onEventClick={handleEventClick}
             />
-          ) : events.length == 0 ? (
+          ) : visibleEvents.length == 0 ? (
             <Typography variant="body1" color="text.secondary">
-              No events yet
+              {view === "past" ? "No past events" : "No upcoming events"}
             </Typography>
           ) :
             (<EventList
-              events={events}
+              events={visibleEvents}
               onEventClick={handleEventClick}
             />)
           }
@@ -141,5 +198,13 @@ export default function EventsPage() {
         />
       </Box>
     </Container>
+  );
+}
+
+export default function EventsPage() {
+  return (
+    <Suspense>
+      <EventsContent />
+    </Suspense>
   );
 }
