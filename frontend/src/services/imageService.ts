@@ -41,10 +41,16 @@ export const ImageService = {
 	},
     
 	uploadToS3: async (uploadUrl: string, file: File, contentType?: string) => {
-		await fetch(uploadUrl, {
+		// fetch only rejects on network errors, so a 403 (expired URL) or 5xx
+		// resolves normally. Check res.ok so the caller can detect failures and
+		// avoid marking a never-uploaded object READY.
+		const res = await fetch(uploadUrl, {
 			method: "PUT",
 			body: file,
 			headers: contentType ? { "Content-Type": contentType } : undefined,
-			});
+		});
+		if (!res.ok) {
+			throw new Error(`Upload failed for ${file.name} (${res.status})`);
+		}
 	},
 };

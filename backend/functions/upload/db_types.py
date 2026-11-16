@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class ImageItem(TypedDict):
@@ -11,6 +11,9 @@ class ImageItem(TypedDict):
     uploadedBy: str
     isThumbnail: bool
     status: str
+    # Epoch seconds; set on PENDING items so DynamoDB TTL reaps abandoned
+    # uploads. Removed when the upload is completed (marked READY).
+    ttl: NotRequired[int]
 
 
 class PresignedUploadResult(TypedDict):
