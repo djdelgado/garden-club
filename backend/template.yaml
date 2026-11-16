@@ -132,6 +132,11 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+      # Abandoned PENDING uploads carry a `ttl` epoch and are auto-expired;
+      # completing an upload removes `ttl` so READY items persist.
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
 
   # Per-folder metadata (imageCount, thumbnailKey) maintained incrementally so
   # listing albums is O(folders) instead of a full scan of the images table.

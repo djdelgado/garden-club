@@ -42,6 +42,7 @@ export function AlbumCard({ folder, onClick, onRefresh }: AlbumCardProps) {
             component="img"
             image={folder.thumbnailUrl}
             alt={folder.folderName}
+            loading="lazy"
             sx={{ objectFit: "cover" , height: 200 }}
           />
       ) : (

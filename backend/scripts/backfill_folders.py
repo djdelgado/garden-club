@@ -63,11 +63,12 @@ def backfill(dynamodb, stage: str) -> None:
             continue
         meta = folders.setdefault(folder_name, {"imageCount": 0, "thumbnailKey": None})
         meta["imageCount"] += 1
+        cover_key = image.get("thumbKey") or image.get("s3Key")
         if image.get("isThumbnail") and not meta["thumbnailKey"]:
-            meta["thumbnailKey"] = image.get("s3Key")
+            meta["thumbnailKey"] = cover_key
         # Fall back to any image's key so the album has a thumbnail.
         if meta["thumbnailKey"] is None:
-            meta["thumbnailKey"] = image.get("s3Key")
+            meta["thumbnailKey"] = cover_key
 
     print(f"Writing {len(folders)} folder items into GardenClubFolders-{stage}...")
     with folders_table.batch_writer() as batch:

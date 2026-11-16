@@ -85,9 +85,10 @@ def bump_folder_on_ready(image: ImageItem) -> None:
 
     update_expr = "ADD imageCount :one"
     values: Dict[str, Any] = {":one": 1}
-    if image.get("isThumbnail") and image.get("s3Key"):
+    cover_key = image.get("thumbKey") or image.get("s3Key")
+    if image.get("isThumbnail") and cover_key:
         update_expr = "SET thumbnailKey = :key ADD imageCount :one"
-        values[":key"] = image.get("s3Key")
+        values[":key"] = cover_key
 
     folders_table.update_item(
         Key={"folderName": folder_name},
@@ -106,9 +107,10 @@ def complete_upload(image_ids: list) -> Dict[str, Any]:
             # retried for an already-READY image.
             response = images_table.update_item(
                 Key={"imageId": image_id},
-                UpdateExpression="SET #s = :val",
+                # Mark READY and drop the TTL so the item is no longer expirable.
+                UpdateExpression="SET #s = :val REMOVE #ttl",
                 ConditionExpression="attribute_exists(imageId)",
-                ExpressionAttributeNames={"#s": "status"},
+                ExpressionAttributeNames={"#s": "status", "#ttl": "ttl"},
                 ExpressionAttributeValues={":val": "READY"},
                 ReturnValues="ALL_OLD",
             )
@@ -157,7 +159,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Check if folder already has images
         user_id = get_user_id(event)
-        now = datetime.now(timezone.utc).isoformat()
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat()
+        # PENDING items expire after 24h via DynamoDB TTL; complete_upload
+        # removes this so READY items are never collected.
+        ttl = int((now_dt + timedelta(hours=24)).timestamp())
 
         images_response = images_table.query(
             IndexName="FolderNameIndex",
@@ -169,45 +175,54 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         upload_results = []
 
-        for idx, file_obj in enumerate(files):
-            file_name = file_obj.get("fileName")
-            content_type = file_obj.get("contentType")
+        with images_table.batch_writer() as batch:
+            for idx, file_obj in enumerate(files):
+                file_name = file_obj.get("fileName")
+                content_type = file_obj.get("contentType")
 
-            if not file_name:
-                continue
+                if not file_name:
+                    continue
 
-            # Generate S3 key and image ID
-            image_id = str(uuid4())
-            s3_key = f"{folder_name}/{image_id}/{file_name}"
+                # Generate S3 key and image ID
+                image_id = str(uuid4())
+                s3_key = f"{folder_name}/{image_id}/{file_name}"
+                # Thumbnail variant lives under the same imageId prefix.
+                thumb_key = f"{folder_name}/{image_id}/thumb/{file_name}"
 
-            # Only mark first image as thumbnail if folder is empty
-            is_thumbnail = (idx == 0 and not folder_has_images)
+                # Only mark first image as thumbnail if folder is empty
+                is_thumbnail = (idx == 0 and not folder_has_images)
 
-            # Generate presigned URL with short expiration (STS token expires after ~1h)
-            upload_url = generate_presigned_url(images_bucket, s3_key, content_type, expiration=60)
+                # Presigned URL valid for 15 minutes so large batches that
+                # start late (browser caps ~6 concurrent PUTs) don't 403.
+                upload_url = generate_presigned_url(images_bucket, s3_key, content_type, expiration=900)
+                thumb_upload_url = generate_presigned_url(images_bucket, thumb_key, content_type, expiration=900)
 
-            # Store image metadata in DynamoDB
-            image_item: ImageItem = {
-                "imageId": image_id,
-                "folderName": folder_name,
-                "s3Key": s3_key,
-                "fileName": file_name,
-                "uploadedAt": now,
-                "uploadedBy": user_id,
-                "isThumbnail": is_thumbnail,
-                "status": "PENDING",
-            }
+                # Store image metadata in DynamoDB
+                image_item: ImageItem = {
+                    "imageId": image_id,
+                    "folderName": folder_name,
+                    "s3Key": s3_key,
+                    "thumbKey": thumb_key,
+                    "fileName": file_name,
+                    "uploadedAt": now,
+                    "uploadedBy": user_id,
+                    "isThumbnail": is_thumbnail,
+                    "status": "PENDING",
+                    "ttl": ttl,
+                }
 
-            images_table.put_item(Item=image_item)
+                batch.put_item(Item=image_item)
 
-            result: PresignedUploadResult = {
-                "fileName": file_name,
-                "imageId": image_id,
-                "uploadUrl": upload_url,
-                "imageKey": s3_key,
-                "isThumbnail": is_thumbnail,
-            }
-            upload_results.append(result)
+                result: PresignedUploadResult = {
+                    "fileName": file_name,
+                    "imageId": image_id,
+                    "uploadUrl": upload_url,
+                    "imageKey": s3_key,
+                    "thumbUploadUrl": thumb_upload_url,
+                    "thumbKey": thumb_key,
+                    "isThumbnail": is_thumbnail,
+                }
+                upload_results.append(result)
 
         return format_response(
             200,

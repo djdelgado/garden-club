@@ -33,7 +33,7 @@ export function ImageGrid({ images, onImageDeleted }: ImageGridProps) {
             sx={{ cursor: "pointer" }}
           >
             <Image
-              src={image.imageUrl ?? `${IMAGES_BASE_URL}/${image.s3Key}`}
+              src={image.thumbUrl ?? image.imageUrl ?? `${IMAGES_BASE_URL}/${image.s3Key}`}
               alt={image.fileName}
               width={300}
               height={300}

@@ -6,11 +6,15 @@ class ImageItem(TypedDict):
     imageId: str
     folderName: str
     s3Key: str
+    thumbKey: NotRequired[str]
     fileName: str
     uploadedAt: str
     uploadedBy: str
     isThumbnail: bool
     status: str
+    # Epoch seconds; set on PENDING items so DynamoDB TTL reaps abandoned
+    # uploads. Removed when the upload is completed (marked READY).
+    ttl: NotRequired[int]
 
 
 class FolderItem(TypedDict):
@@ -30,4 +34,6 @@ class PresignedUploadResult(TypedDict):
     imageId: str
     uploadUrl: str
     imageKey: str
+    thumbUploadUrl: str
+    thumbKey: str
     isThumbnail: bool
