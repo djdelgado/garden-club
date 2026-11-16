@@ -34,7 +34,14 @@ export const ImageService = {
 
   presignUpload: async (folderName: string, files: { fileName: string; contentType?: string }[]) => {
     const response = await apiPost<{
-      uploads: { uploadUrl: string; imageKey: string; fileName: string; imageId: string }[];
+      uploads: {
+        uploadUrl: string;
+        imageKey: string;
+        thumbUploadUrl: string;
+        thumbKey: string;
+        fileName: string;
+        imageId: string;
+      }[];
     }>(`${UPLOAD_PATH}/presign`, { folderName, files });
     return response.uploads;
   },
@@ -44,7 +51,7 @@ export const ImageService = {
 		await apiPost(`${UPLOAD_PATH}/complete`, { imageIds });
 	},
     
-	uploadToS3: async (uploadUrl: string, file: File, contentType?: string) => {
+	uploadToS3: async (uploadUrl: string, file: Blob, contentType?: string) => {
 		// fetch only rejects on network errors, so a 403 (expired URL) or 5xx
 		// resolves normally. Check res.ok so the caller can detect failures and
 		// avoid marking a never-uploaded object READY.
@@ -54,7 +61,7 @@ export const ImageService = {
 			headers: contentType ? { "Content-Type": contentType } : undefined,
 		});
 		if (!res.ok) {
-			throw new Error(`Upload failed for ${file.name} (${res.status})`);
+			throw new Error(`Upload failed (${res.status})`);
 		}
 	},
 };

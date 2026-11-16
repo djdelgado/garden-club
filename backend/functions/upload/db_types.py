@@ -6,6 +6,7 @@ class ImageItem(TypedDict):
     imageId: str
     folderName: str
     s3Key: str
+    thumbKey: NotRequired[str]
     fileName: str
     uploadedAt: str
     uploadedBy: str
@@ -22,4 +23,6 @@ class PresignedUploadResult(TypedDict):
     imageId: str
     uploadUrl: str
     imageKey: str
+    thumbUploadUrl: str
+    thumbKey: str
     isThumbnail: bool

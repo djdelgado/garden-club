@@ -6,6 +6,7 @@ class ImageItem(TypedDict):
     imageId: str
     folderName: str
     s3Key: str
+    thumbKey: NotRequired[str]
     fileName: str
     uploadedAt: str
     uploadedBy: str

@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { ImageService } from "@/services/imageService";
+import { outputContentType, processImage } from "@/lib/imageResize";
 import { DeleteAlbumBtn } from "./DeleteAlbumBtn";
 
 interface CreateAlbumDialogProps {
@@ -40,6 +41,7 @@ type UploadStatus = "pending" | "uploading" | "done" | "error";
 interface UploadInfo {
   status: UploadStatus;
   uploadUrl?: string;
+  thumbUploadUrl?: string;
   imageId?: string;
   contentType?: string;
 }
@@ -199,6 +201,7 @@ export function CreateAlbumDialog({
   const uploadOne = async (info: {
     fileName: string;
     uploadUrl: string;
+    thumbUploadUrl: string;
     imageId: string;
     file: File;
   }): Promise<boolean> => {
@@ -207,7 +210,11 @@ export function CreateAlbumDialog({
       [info.fileName]: { ...s[info.fileName], status: "uploading" },
     }));
     try {
-      await ImageService.uploadToS3(info.uploadUrl, info.file, info.file.type);
+      // Resize inside the worker slot so a large batch never decodes every
+      // photo at once (see lib/imageResize), then PUT original + thumbnail.
+      const processed = await processImage(info.file);
+      await ImageService.uploadToS3(info.uploadUrl, processed.original, processed.contentType);
+      await ImageService.uploadToS3(info.thumbUploadUrl, processed.thumb, processed.contentType);
       setUploadState((s) => ({
         ...s,
         [info.fileName]: { ...s[info.fileName], status: "done" },
@@ -226,7 +233,7 @@ export function CreateAlbumDialog({
   const uploadImages = async (): Promise<boolean> => {
     const uploads = await ImageService.presignUpload(
       folderName.trim(),
-      files.map((f) => ({ fileName: f.name, contentType: f.type }))
+      files.map((f) => ({ fileName: f.name, contentType: outputContentType(f) }))
     );
 
     const byName = new Map(files.map((f) => [f.name, f]));
@@ -239,8 +246,9 @@ export function CreateAlbumDialog({
         next[u.fileName] = {
           status: "pending",
           uploadUrl: u.uploadUrl,
+          thumbUploadUrl: u.thumbUploadUrl,
           imageId: u.imageId,
-          contentType: file?.type,
+          contentType: file ? outputContentType(file) : undefined,
         };
       });
       return next;
@@ -255,6 +263,7 @@ export function CreateAlbumDialog({
         const ok = await uploadOne({
           fileName: u.fileName,
           uploadUrl: u.uploadUrl,
+          thumbUploadUrl: u.thumbUploadUrl,
           imageId: u.imageId,
           file,
         });
@@ -276,12 +285,13 @@ export function CreateAlbumDialog({
   const handleRetry = async (fileName: string) => {
     const info = uploadState[fileName];
     const file = files.find((f) => f.name === fileName);
-    if (!info?.uploadUrl || !info.imageId || !file) return;
+    if (!info?.uploadUrl || !info.thumbUploadUrl || !info.imageId || !file) return;
     // Presigned URLs are valid for 15 min and the key is single-use per
     // object, so a failed PUT can be retried against the same URL.
     const ok = await uploadOne({
       fileName,
       uploadUrl: info.uploadUrl,
+      thumbUploadUrl: info.thumbUploadUrl,
       imageId: info.imageId,
       file,
     });
