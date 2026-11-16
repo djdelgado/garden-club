@@ -26,6 +26,12 @@ images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
 images_table = dynamodb.Table(os.environ.get("IMAGES_TABLE_NAME", "GardenClubImages"))
 folders_table = dynamodb.Table(os.environ.get("FOLDERS_TABLE_NAME", "GardenClubFolders"))
 
+# Image keys are immutable UUID paths, so stored objects can be cached forever by
+# both CloudFront and the browser. This is baked into the presigned PUT, so the
+# client MUST send a matching `Cache-Control` header on upload or the signature
+# check fails (see frontend ImageService.uploadToS3).
+IMAGE_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
 
 def format_response(status_code: int, body: Any) -> Dict[str, Any]:
     return {
@@ -60,10 +66,14 @@ def generate_presigned_url(bucket: str, key: str, content_type: str,expiration: 
     """Generate presigned S3 PUT URL"""
     url = s3_client.generate_presigned_url(
         "put_object",
-        Params={"Bucket": bucket, "Key": key, "ContentType": content_type},
+        Params={
+            "Bucket": bucket,
+            "Key": key,
+            "ContentType": content_type,
+            "CacheControl": IMAGE_CACHE_CONTROL,
+        },
         ExpiresIn=expiration,
         HttpMethod="PUT",
-        
     )
     # Replace internal endpoint with public endpoint if configured
     # In production: S3_PUBLIC_ENDPOINT won't be set, URL will use real AWS domain

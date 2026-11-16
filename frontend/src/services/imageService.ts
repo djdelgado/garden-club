@@ -58,7 +58,12 @@ export const ImageService = {
 		const res = await fetch(uploadUrl, {
 			method: "PUT",
 			body: file,
-			headers: contentType ? { "Content-Type": contentType } : undefined,
+			// The presigned PUT signs Cache-Control (see backend upload handler), so
+			// this value must match IMAGE_CACHE_CONTROL exactly or S3 rejects the PUT.
+			headers: {
+				"Cache-Control": "public, max-age=31536000, immutable",
+				...(contentType ? { "Content-Type": contentType } : {}),
+			},
 		});
 		if (!res.ok) {
 			throw new Error(`Upload failed (${res.status})`);

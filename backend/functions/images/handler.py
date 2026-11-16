@@ -1,7 +1,7 @@
 import json
 import os
 from typing import Any, Dict
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote
 
 import boto3
 from aws_lambda_powertools import Logger
@@ -21,6 +21,28 @@ s3_client = boto3.client("s3", **aws_kwargs)
 images_table = dynamodb.Table(os.environ.get("IMAGES_TABLE_NAME", "GardenClubImages"))
 folders_table = dynamodb.Table(os.environ.get("FOLDERS_TABLE_NAME", "GardenClubFolders"))
 images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
+images_cdn_domain = os.environ.get("IMAGES_CDN_DOMAIN", "")
+
+
+def build_image_url(s3_key: str) -> str:
+    """Build a browser-facing URL for an image.
+
+    In AWS, return a stable CloudFront URL (``https://<cdn>/<key>``). Because the
+    key is an immutable UUID path, the URL never changes, so CloudFront and the
+    browser can cache it indefinitely.
+
+    Under LocalStack there is no CloudFront, so fall back to a presigned S3 URL
+    (the per-request signature defeats caching, but that only affects local dev).
+    The fallback is gated on LOCALSTACK_ENDPOINT being set.
+    """
+    if os.environ.get("LOCALSTACK_ENDPOINT"):
+        return s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": images_bucket, "Key": s3_key},
+            ExpiresIn=3600,
+        )
+    # quote each path segment but keep the slashes between them.
+    return f"https://{images_cdn_domain}/{quote(s3_key, safe='/')}"
 
 
 def query_all(table, **kwargs) -> list:
@@ -50,15 +72,6 @@ def scan_all(table, **kwargs) -> list:
         if not last_key:
             return items
         kwargs["ExclusiveStartKey"] = last_key
-
-
-def presign_get(s3_key: str) -> str:
-    """Generate a presigned GET URL (valid for 1 hour)."""
-    return s3_client.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": images_bucket, "Key": s3_key},
-        ExpiresIn=3600,
-    )
 
 
 def adjust_folder_count(folder_name: str, delta: int) -> None:
@@ -101,15 +114,6 @@ def format_response(status_code: int, body: Any) -> Dict[str, Any]:
     }
 
 
-def presign_get(s3_key: str) -> str:
-    """Generate a presigned GET URL for an object (valid for 1 hour)"""
-    return s3_client.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": images_bucket, "Key": s3_key},
-        ExpiresIn=3600,
-    )
-
-
 def get_query_params(event: Dict[str, Any]) -> Dict[str, str]:
     """Extract query parameters from the event"""
     query_string = event.get("rawQueryString", "")
@@ -141,7 +145,7 @@ def get_all_folders() -> Dict[str, Any]:
             }
             thumbnail_key = item.get("thumbnailKey")
             if thumbnail_key:
-                meta["thumbnailUrl"] = presign_get(thumbnail_key)
+                meta["thumbnailUrl"] = build_image_url(thumbnail_key)
             folders.append(meta)
 
         return format_response(200, {"folders": folders})
@@ -167,11 +171,11 @@ def get_images_by_folder(folder_name: str) -> Dict[str, Any]:
         for item in items:
             s3_key = item.get("s3Key")
             if s3_key:
-                item["imageUrl"] = presign_get(s3_key)
+                item["imageUrl"] = build_image_url(s3_key)
             # Thumbnail for grid rendering; fall back to the original for images
             # uploaded before thumbnails existed.
             thumb_key = item.get("thumbKey")
-            item["thumbUrl"] = presign_get(thumb_key) if thumb_key else item.get("imageUrl")
+            item["thumbUrl"] = build_image_url(thumb_key) if thumb_key else item.get("imageUrl")
         return format_response(200, {"images": items})
     except Exception as err:
         logger.exception(f"Error getting images for folder {folder_name}")
