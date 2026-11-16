@@ -1,17 +1,41 @@
 "use client";
 
-import { Modal, Box, IconButton, Typography } from "@mui/material";
+import { useState } from "react";
+import { Modal, Box, IconButton, Typography, Button, Alert } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { GardenImage } from "@/types/image";
 import Image from "next/image";
 import { IMAGES_BASE_URL } from "@/lib/constants";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { ImageService } from "@/services/imageService";
 
 interface ImageModalProps {
   image: GardenImage;
   onClose: () => void;
+  onDeleted?: (imageId: string) => void;
 }
 
-export function ImageModal({ image, onClose }: ImageModalProps) {
+export function ImageModal({ image, onClose, onDeleted }: ImageModalProps) {
+  const { isAdmin } = useIsAdmin();
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setError(null);
+    try {
+      await ImageService.deleteImage(image.imageId);
+      onDeleted?.(image.imageId);
+      onClose();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to delete image. Please try again.");
+      setDeleting(false);
+    }
+  };
+
   return (
     <Modal
       open={true}
@@ -67,6 +91,65 @@ export function ImageModal({ image, onClose }: ImageModalProps) {
           >
             {image.fileName}
           </Typography>
+
+          {isAdmin && (
+            <Box sx={{ mt: 2 }}>
+              {error && (
+                <Alert severity="error" sx={{ mb: 1 }}>
+                  {error}
+                </Alert>
+              )}
+              {confirming ? (
+                <Box
+                  sx={{
+                    display: "flex",
+                    gap: 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Typography variant="body2" sx={{ color: "white" }}>
+                    Delete this image?
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    size="small"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                  >
+                    {deleting ? "Deleting…" : "Confirm"}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="inherit"
+                    size="small"
+                    onClick={() => setConfirming(false)}
+                    disabled={deleting}
+                    sx={{ color: "white", borderColor: "rgba(255,255,255,0.5)" }}
+                  >
+                    Cancel
+                  </Button>
+                </Box>
+              ) : (
+                <Box sx={{ display: "flex", justifyContent: "center" }}>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => {
+                      setError(null);
+                      setConfirming(true);
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          )}
         </Box>
       </Box>
     </Modal>
