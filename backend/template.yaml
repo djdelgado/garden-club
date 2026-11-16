@@ -30,8 +30,14 @@ Globals:
       Variables:
         EVENTS_TABLE_NAME: !Ref EventsTable
         IMAGES_TABLE_NAME: !Ref ImagesTable
+        FOLDERS_TABLE_NAME: !Ref FoldersTable
         MEMBERS_TABLE_NAME: !Ref MembersTable
         IMAGES_BUCKET_NAME: !Ref ImagesBucket
+        # CloudFront domain fronting the images bucket. Image handlers build
+        # stable, cacheable URLs as https://<IMAGES_CDN_DOMAIN>/<s3Key>. Unused
+        # under LocalStack (no CloudFront), where the presigned path is taken
+        # instead — gated on LOCALSTACK_ENDPOINT being set.
+        IMAGES_CDN_DOMAIN: !GetAtt ImagesCdnDistribution.DomainName
         USER_POOL_ID: !Ref GardenClubUserPool
         POWERTOOLS_SERVICE_NAME: GardenClub
         LOG_LEVEL: INFO
@@ -131,6 +137,25 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+      # Abandoned PENDING uploads carry a `ttl` epoch and are auto-expired;
+      # completing an upload removes `ttl` so READY items persist.
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # Per-folder metadata (imageCount, thumbnailKey) maintained incrementally so
+  # listing albums is O(folders) instead of a full scan of the images table.
+  FoldersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'GardenClubFolders-${Stage}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: folderName
+          AttributeType: S
+      KeySchema:
+        - AttributeName: folderName
+          KeyType: HASH
 
   MembersTable:
     Type: AWS::DynamoDB::Table
@@ -189,6 +214,68 @@ Resources:
             AllowedHeaders:
               - '*'
             MaxAge: 3000
+
+  # CloudFront CDN for images. The bucket stays fully private
+  # (PublicAccessBlockConfiguration above is untouched); CloudFront reads it via
+  # Origin Access Control (OAC), and the bucket policy below only trusts this one
+  # distribution. Image keys are immutable UUID paths, so objects can be cached
+  # aggressively (see the Cache-Control header set on upload) and never need
+  # invalidation — a deleted key is simply never re-used.
+  ImagesOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub 'garden-club-images-oac-${Stage}'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  ImagesCdnDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'Garden Club images CDN (${Stage})'
+        PriceClass: PriceClass_100
+        HttpVersion: http2and3
+        Origins:
+          - Id: ImagesS3Origin
+            DomainName: !GetAtt ImagesBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt ImagesOriginAccessControl.Id
+            # S3OriginConfig is required even with OAC; OriginAccessIdentity must
+            # be empty (legacy OAI is not used).
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: ImagesS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          # AWS managed "CachingOptimized" cache policy (long TTLs, no query
+          # strings/cookies/headers in the cache key).
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+
+  ImagesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ImagesBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${ImagesBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${ImagesCdnDistribution}'
 
   # API Gateway HTTP API
   GardenClubApi:
@@ -336,9 +423,11 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:DeleteItem
                   - dynamodb:UpdateItem
+                  - dynamodb:GetItem
                 Resource:
                   - !GetAtt ImagesTable.Arn
                   - !Sub '${ImagesTable.Arn}/index/*'
+                  - !GetAtt FoldersTable.Arn
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -374,6 +463,7 @@ Resources:
                 Resource:
                   - !GetAtt ImagesTable.Arn
                   - !Sub '${ImagesTable.Arn}/index/*'
+                  - !GetAtt FoldersTable.Arn
 
   # Lambda Functions
   EventsFunction:
@@ -545,3 +635,6 @@ Outputs:
   ImagesBucketName:
     Description: S3 Images Bucket Name
     Value: !Ref ImagesBucket
+  ImagesCdnDomain:
+    Description: CloudFront domain serving images (set NEXT_PUBLIC_IMAGES_BASE_URL to https://<this>)
+    Value: !GetAtt ImagesCdnDistribution.DomainName

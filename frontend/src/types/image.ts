@@ -6,6 +6,8 @@ export interface GardenImage {
   uploadedAt: string;
   uploadedBy: string;
   isThumbnail: boolean;
+  thumbKey?: string;
   imageUrl?: string;
+  thumbUrl?: string;
   status?: "PENDING" | "READY";
 }

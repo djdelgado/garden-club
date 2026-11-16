@@ -62,6 +62,17 @@ awslocal dynamodb create-table \
 echo -e "${GREEN}✓ Images table created${NC}"
 
 awslocal dynamodb create-table \
+  --table-name GardenClubFolders \
+  --attribute-definitions \
+    AttributeName=folderName,AttributeType=S \
+  --key-schema \
+    AttributeName=folderName,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  2>/dev/null || echo "Folders table already exists"
+
+echo -e "${GREEN}✓ Folders table created${NC}"
+
+awslocal dynamodb create-table \
   --table-name GardenClubMembers \
   --attribute-definitions \
     AttributeName=memberId,AttributeType=S \

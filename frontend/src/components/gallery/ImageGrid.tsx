@@ -49,7 +49,7 @@ export function ImageGrid({ images, onImageDeleted }: ImageGridProps) {
               }}
             >
               <Image
-                src={imageSrc(image)}
+                src={image.thumbUrl ?? imageSrc(image)}
                 alt={image.fileName}
                 fill
                 sizes={`${Math.ceil(100 / cols)}vw`}
