@@ -82,6 +82,10 @@ export function CreateAlbumDialog({
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploadState, setUploadState] = useState<Record<string, UploadInfo>>({});
+  // True once anything was persisted (rename or at least one READY image), so
+  // closing the dialog refreshes the parent even after a partial failure.
+  // A ref, not state: it is read synchronously right after being set.
+  const dirtyRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -149,11 +153,13 @@ export function CreateAlbumDialog({
             folderData?.folderName ?? "",
             folderName.trim()
           );
+          dirtyRef.current = true;
         }
         // Only presign/upload when the admin actually added files, so a
         // pure rename doesn't hit the empty-files 400 from /upload/presign.
         const allOk = files.length === 0 ? true : await uploadImages();
-        onAlbumChanged();
+        // Don't notify the parent on partial failure: its handler closes the
+        // dialog, which would hide the per-file Retry buttons.
         if (allOk) {
           handleClose();
         } else {
@@ -177,7 +183,6 @@ export function CreateAlbumDialog({
 
     try {
       const allOk = await uploadImages();
-      onAlbumChanged();
       if (allOk) {
         handleClose();
       } else {
@@ -262,6 +267,7 @@ export function CreateAlbumDialog({
     // (403/5xx) upload ready, which used to leave broken tiles in the gallery.
     if (successfulIds.length > 0) {
       await ImageService.completeUpload(successfulIds);
+      dirtyRef.current = true;
     }
 
     return successfulIds.length === uploads.length;
@@ -282,7 +288,7 @@ export function CreateAlbumDialog({
     if (ok) {
       try {
         await ImageService.completeUpload([info.imageId]);
-        onAlbumChanged();
+        dirtyRef.current = true;
       } catch {
         setUploadState((s) => ({
           ...s,
@@ -293,11 +299,18 @@ export function CreateAlbumDialog({
   };
 
   const handleClose = () => {
+    const changed = dirtyRef.current;
+    dirtyRef.current = false;
     setFolderName("");
     setFiles([]);
     setError(null);
     setUploadState({});
-    onClose();
+    // Parents' onAlbumChanged both closes the dialog and refreshes the list.
+    if (changed) {
+      onAlbumChanged();
+    } else {
+      onClose();
+    }
   };
 
   const statuses = Object.values(uploadState);
@@ -407,6 +420,9 @@ export function CreateAlbumDialog({
                         slotProps={{
                           primary: { variant: "caption" },
                           secondary: {
+                            // The uploading row nests a LinearProgress (a div),
+                            // which is invalid inside the default <p>.
+                            component: "div",
                             variant: "caption",
                             color:
                               info?.status === "error"
