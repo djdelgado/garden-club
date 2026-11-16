@@ -32,6 +32,11 @@ Globals:
         IMAGES_TABLE_NAME: !Ref ImagesTable
         MEMBERS_TABLE_NAME: !Ref MembersTable
         IMAGES_BUCKET_NAME: !Ref ImagesBucket
+        # CloudFront domain fronting the images bucket. Image handlers build
+        # stable, cacheable URLs as https://<IMAGES_CDN_DOMAIN>/<s3Key>. Unused
+        # under LocalStack (no CloudFront), where the presigned path is taken
+        # instead — gated on LOCALSTACK_ENDPOINT being set.
+        IMAGES_CDN_DOMAIN: !GetAtt ImagesCdnDistribution.DomainName
         USER_POOL_ID: !Ref GardenClubUserPool
         POWERTOOLS_SERVICE_NAME: GardenClub
         LOG_LEVEL: INFO
@@ -189,6 +194,68 @@ Resources:
             AllowedHeaders:
               - '*'
             MaxAge: 3000
+
+  # CloudFront CDN for images. The bucket stays fully private
+  # (PublicAccessBlockConfiguration above is untouched); CloudFront reads it via
+  # Origin Access Control (OAC), and the bucket policy below only trusts this one
+  # distribution. Image keys are immutable UUID paths, so objects can be cached
+  # aggressively (see the Cache-Control header set on upload) and never need
+  # invalidation — a deleted key is simply never re-used.
+  ImagesOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub 'garden-club-images-oac-${Stage}'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  ImagesCdnDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'Garden Club images CDN (${Stage})'
+        PriceClass: PriceClass_100
+        HttpVersion: http2and3
+        Origins:
+          - Id: ImagesS3Origin
+            DomainName: !GetAtt ImagesBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt ImagesOriginAccessControl.Id
+            # S3OriginConfig is required even with OAC; OriginAccessIdentity must
+            # be empty (legacy OAI is not used).
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: ImagesS3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          # AWS managed "CachingOptimized" cache policy (long TTLs, no query
+          # strings/cookies/headers in the cache key).
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+
+  ImagesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ImagesBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontServicePrincipalReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${ImagesBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${ImagesCdnDistribution}'
 
   # API Gateway HTTP API
   GardenClubApi:
@@ -545,3 +612,6 @@ Outputs:
   ImagesBucketName:
     Description: S3 Images Bucket Name
     Value: !Ref ImagesBucket
+  ImagesCdnDomain:
+    Description: CloudFront domain serving images (set NEXT_PUBLIC_IMAGES_BASE_URL to https://<this>)
+    Value: !GetAtt ImagesCdnDistribution.DomainName

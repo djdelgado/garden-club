@@ -137,6 +137,27 @@ sam build
 sam deploy --guided
 ```
 
+#### Images CDN (CloudFront)
+
+The images bucket stays fully private and is served to the browser through a
+CloudFront distribution (Origin Access Control). The images Lambda returns
+**stable** `https://<cdn-domain>/<key>` URLs (keys are immutable UUID paths), so
+CloudFront and the browser cache them indefinitely — revisiting an album serves
+photos from cache instead of re-downloading them. Under LocalStack (no
+CloudFront) the handlers fall back to presigned S3 URLs.
+
+After deploying, grab the CloudFront domain from the `ImagesCdnDomain` stack
+output (also printed to the backend deploy job summary) and set the frontend's
+`NEXT_PUBLIC_IMAGES_BASE_URL` secret to `https://<ImagesCdnDomain>`:
+
+```bash
+aws cloudformation describe-stacks --stack-name garden-club-dev \
+  --query "Stacks[0].Outputs[?OutputKey=='ImagesCdnDomain'].OutputValue" --output text
+```
+
+Deleting an image or folder does **not** invalidate the CDN — UUID keys are never
+re-used, so any cached copy of a deleted object is harmless and simply ages out.
+
 ### Bootstrap the First Admin
 
 On a freshly deployed stack no admin exists, and `POST /members` is Admins-only —

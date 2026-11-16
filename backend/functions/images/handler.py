@@ -1,7 +1,7 @@
 import json
 import os
 from typing import Any, Dict
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, quote
 
 import boto3
 from aws_lambda_powertools import Logger
@@ -20,6 +20,28 @@ s3_client = boto3.client("s3", **aws_kwargs)
 
 images_table = dynamodb.Table(os.environ.get("IMAGES_TABLE_NAME", "GardenClubImages"))
 images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
+images_cdn_domain = os.environ.get("IMAGES_CDN_DOMAIN", "")
+
+
+def build_image_url(s3_key: str) -> str:
+    """Build a browser-facing URL for an image.
+
+    In AWS, return a stable CloudFront URL (``https://<cdn>/<key>``). Because the
+    key is an immutable UUID path, the URL never changes, so CloudFront and the
+    browser can cache it indefinitely.
+
+    Under LocalStack there is no CloudFront, so fall back to a presigned S3 URL
+    (the per-request signature defeats caching, but that only affects local dev).
+    The fallback is gated on LOCALSTACK_ENDPOINT being set.
+    """
+    if os.environ.get("LOCALSTACK_ENDPOINT"):
+        return s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": images_bucket, "Key": s3_key},
+            ExpiresIn=3600,
+        )
+    # quote each path segment but keep the slashes between them.
+    return f"https://{images_cdn_domain}/{quote(s3_key, safe='/')}"
 
 
 def format_response(status_code: int, body: Any) -> Dict[str, Any]:
@@ -69,13 +91,7 @@ def get_all_folders() -> Dict[str, Any]:
                 if item.get("isThumbnail") and "thumbnailUrl" not in folders_dict[folder_name]:
                     s3_key = item.get("s3Key")
                     if s3_key:
-                        # Generate presigned URL for thumbnail (valid for 1 hour)
-                        thumbnail_url = s3_client.generate_presigned_url(
-                            "get_object",
-                            Params={"Bucket": images_bucket, "Key": s3_key},
-                            ExpiresIn=3600,
-                        )
-                        folders_dict[folder_name]["thumbnailUrl"] = thumbnail_url
+                        folders_dict[folder_name]["thumbnailUrl"] = build_image_url(s3_key)
 
         folders = list(folders_dict.values())
         return format_response(200, {"folders": folders})
@@ -109,11 +125,7 @@ def get_images_by_folder(folder_name: str) -> Dict[str, Any]:
         for item in items:
             s3_key = item.get("s3Key")
             if s3_key:
-                item["imageUrl"] = s3_client.generate_presigned_url(
-                    "get_object",
-                    Params={"Bucket": images_bucket, "Key": s3_key},
-                    ExpiresIn=3600,
-                )
+                item["imageUrl"] = build_image_url(s3_key)
         return format_response(200, {"images": items})
     except Exception as err:
         logger.exception(f"Error getting images for folder {folder_name}")
