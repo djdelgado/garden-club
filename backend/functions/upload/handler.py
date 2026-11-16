@@ -24,6 +24,7 @@ dynamodb = boto3.resource("dynamodb", **aws_kwargs)
 
 images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
 images_table = dynamodb.Table(os.environ.get("IMAGES_TABLE_NAME", "GardenClubImages"))
+folders_table = dynamodb.Table(os.environ.get("FOLDERS_TABLE_NAME", "GardenClubFolders"))
 
 
 def format_response(status_code: int, body: Any) -> Dict[str, Any]:
@@ -74,17 +75,50 @@ def generate_presigned_url(bucket: str, key: str, content_type: str,expiration: 
     return url
 
 
+def bump_folder_on_ready(image: ImageItem) -> None:
+    """Fold a freshly-READY image into its folder's metadata item: +1 to the
+    count (ADD creates the item on first upload) and, when the image is the
+    folder thumbnail, record its key for the folder listing."""
+    folder_name = image.get("folderName")
+    if not folder_name:
+        return
+
+    update_expr = "ADD imageCount :one"
+    values: Dict[str, Any] = {":one": 1}
+    if image.get("isThumbnail") and image.get("s3Key"):
+        update_expr = "SET thumbnailKey = :key ADD imageCount :one"
+        values[":key"] = image.get("s3Key")
+
+    folders_table.update_item(
+        Key={"folderName": folder_name},
+        UpdateExpression=update_expr,
+        ExpressionAttributeValues=values,
+    )
+
+
 def complete_upload(image_ids: list) -> Dict[str, Any]:
     """POST /upload/complete - Mark uploads as READY"""
     try:
         for image_id in image_ids:
-            images_table.update_item(
+            # ALL_OLD lets us read the pre-update item (folderName, isThumbnail,
+            # previous status) so the folder counter only moves on the actual
+            # PENDING -> READY transition and stays correct if complete is
+            # retried for an already-READY image.
+            response = images_table.update_item(
                 Key={"imageId": image_id},
                 UpdateExpression="SET #s = :val",
+                ConditionExpression="attribute_exists(imageId)",
                 ExpressionAttributeNames={"#s": "status"},
                 ExpressionAttributeValues={":val": "READY"},
+                ReturnValues="ALL_OLD",
             )
+            old_item: ImageItem = response.get("Attributes", {})
+            if old_item.get("status") != "READY":
+                bump_folder_on_ready(old_item)
+
         return format_response(200, {"updated": len(image_ids)})
+    except images_table.meta.client.exceptions.ConditionalCheckFailedException:
+        return format_response(404, {"error": "One or more images not found"})
     except Exception as err:
         logger.exception("Error completing uploads")
         return format_response(500, {"error": str(err)})
