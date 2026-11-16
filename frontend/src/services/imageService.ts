@@ -5,16 +5,34 @@ import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api';
 const IMAGE_PATH = "/images";
 const UPLOAD_PATH = "/upload";
 
+// Simple in-memory cache for the browsing session so back-navigation
+// (album -> back -> album) is instant. The API returns 1 h presigned URLs,
+// so entries are comfortably fresh within a session; any mutation
+// (upload, rename, delete) clears the cache to avoid stale data.
+let foldersCache: ImageFolder[] | null = null;
+const imagesByFolder = new Map<string, GardenImage[]>();
+
+function clearCache() {
+  foldersCache = null;
+  imagesByFolder.clear();
+}
+
 export const ImageService = {
 
   getImageFolders: async () => {
+    if (foldersCache) return foldersCache;
     const response = await apiGet<{ folders: ImageFolder[] }>(`${IMAGE_PATH}/folders`);
-    return response?.folders || [];
+    foldersCache = response?.folders || [];
+    return foldersCache;
   },
 
   getImagesbyFolderName: async (folderName: string) => {
+    const cached = imagesByFolder.get(folderName);
+    if (cached) return cached;
     const response = await apiGet<{ images: GardenImage[] }>(`${IMAGE_PATH}?folderName=${encodeURIComponent(folderName)}`);
-    return response?.images || [];
+    const images = response?.images || [];
+    imagesByFolder.set(folderName, images);
+    return images;
   },
 
   updateFolder: async (folderName: string, newFolderName: string) => {
@@ -22,10 +40,12 @@ export const ImageService = {
       folderName,
       newFolderName,
     });
+    clearCache();
   },
 
   deleteFolder: async (folderName: string) => {
     await apiDelete(`${IMAGE_PATH}/folders/${encodeURIComponent(folderName)}`);
+    clearCache();
   },
 
   presignUpload: async (folderName: string, files: { fileName: string; contentType?: string }[]) => {
@@ -35,11 +55,12 @@ export const ImageService = {
     return response.uploads;
   },
 
-  
+
   completeUpload: async (imageIds: string[]) => {
 		await apiPost(`${UPLOAD_PATH}/complete`, { imageIds });
+		clearCache();
 	},
-    
+
 	uploadToS3: async (uploadUrl: string, file: File, contentType?: string) => {
 		await fetch(uploadUrl, {
 			method: "PUT",
