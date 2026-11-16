@@ -9,9 +9,10 @@ import { IMAGES_BASE_URL } from "@/lib/constants";
 
 interface ImageGridProps {
   images: GardenImage[];
+  onImageDeleted?: (imageId: string) => void;
 }
 
-export function ImageGrid({ images }: ImageGridProps) {
+export function ImageGrid({ images, onImageDeleted }: ImageGridProps) {
   const [selectedImage, setSelectedImage] = useState<GardenImage | null>(null);
 
   if (images.length === 0) {
@@ -48,6 +49,7 @@ export function ImageGrid({ images }: ImageGridProps) {
         <ImageModal
           image={selectedImage}
           onClose={() => setSelectedImage(null)}
+          onDeleted={onImageDeleted}
         />
       )}
     </>
