@@ -9,6 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useRouter } from "next/navigation";
+import { UpcomingEventsStrip } from "@/components/events/UpcomingEventsStrip";
 
 const FEATURE_CARDS = [
   {
@@ -199,45 +200,8 @@ export default function HomePage() {
           ))}
         </Box>
 
-        {/* TODO: Amber CTA strip - need to integrate with events api */}
-        {/* <Box
-          sx={{
-            background: "linear-gradient(135deg, #fef8ee, #fdf0d5)",
-            border: "1px solid #e8d9bb",
-            borderRadius: 3,
-            px: { xs: 3, md: 4 },
-            py: 3,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 2,
-            mb: 4,
-          }}
-        >
-          <Box>
-            <Typography
-              sx={{
-                fontSize: "1.15rem",
-                fontWeight: 700,
-                color: "#7c5c2a",
-                mb: 0.5,
-              }}
-            >
-              🌻 Next Meeting: June 14th
-            </Typography>
-            <Typography sx={{ fontSize: "0.875rem", color: "#9a7a4a" }}>
-              Audubon Park Pavilion · 10:00 AM · All members welcome
-            </Typography>
-          </Box>
-          <Button
-            variant="contained"
-            onClick={() => router.push("/events")}
-            sx={{ bgcolor: "warning.main", fontWeight: 600 }}
-          >
-            See All Events →
-          </Button>
-        </Box> */}
+        {/* Upcoming-events CTA strip (wired to the events API) */}
+        <UpcomingEventsStrip />
       </Container>
     </Box>
   );
