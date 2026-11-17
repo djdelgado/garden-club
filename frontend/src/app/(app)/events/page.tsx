@@ -15,7 +15,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { EventService } from "@/services/eventService";
-import { Event } from "@/types/event";
+import { Event, RsvpSummary } from "@/types/event";
 import { EventList } from "@/components/events/EventList";
 import { CreateEventModal } from "@/components/events/CreateEventModal";
 import { EventDetailModal } from "@/components/events/EventDetailModal";
@@ -66,9 +66,28 @@ function EventsContent() {
 
   const visibleEvents = view === "past" ? past : upcoming;
 
-  const handleEventClick = (eventId: string) => {
+  const handleEventClick = async (eventId: string) => {
     const event = events.find((e) => e.eventId === eventId) ?? null;
+    // Show the modal immediately from the list data, then fetch attendee names.
     setSelectedEvent(event);
+    try {
+      const detail = await EventService.getEvent(eventId);
+      setSelectedEvent((current) =>
+        current?.eventId === eventId ? detail : current
+      );
+    } catch (err) {
+      console.error("Failed to load event detail", err);
+    }
+  };
+
+  // Reconcile RSVP count/state from the server response so it survives reloads.
+  const handleRsvpChange = (eventId: string, summary: RsvpSummary) => {
+    setEvents((prev) =>
+      prev.map((e) => (e.eventId === eventId ? { ...e, ...summary } : e))
+    );
+    setSelectedEvent((current) =>
+      current?.eventId === eventId ? { ...current, ...summary } : current
+    );
   };
 
   const handleEditEvent = (event: Event) => {
@@ -149,6 +168,7 @@ function EventsContent() {
             (<EventList
               events={visibleEvents}
               onEventClick={handleEventClick}
+              onRsvpChange={handleRsvpChange}
             />)
           }
         </Box>
@@ -193,6 +213,7 @@ function EventsContent() {
         <EventDetailModal
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
+          onRsvpChange={handleRsvpChange}
           onEdit={handleEditEvent}
           onDeleted={handleEventDeleted}
         />

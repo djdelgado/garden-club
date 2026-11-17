@@ -9,16 +9,19 @@ import {
   Button,
   Typography,
   Box,
+  Chip,
+  Stack,
   Alert,
   CircularProgress,
 } from "@mui/material";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import Image from "next/image";
-import { Event } from "@/types/event";
+import { Event, RsvpSummary } from "@/types/event";
+import { EventService } from "@/services/eventService";
 import { IMAGES_BASE_URL } from "@/lib/constants";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
-import { EventService } from "@/services/eventService";
 
 interface EventDetailModalProps {
   event: Event | null;
@@ -27,6 +30,7 @@ interface EventDetailModalProps {
   // upcoming-events strip) can render the modal without wiring them up.
   onEdit?: (event: Event) => void;
   onDeleted?: () => void;
+  onRsvpChange?: (eventId: string, summary: RsvpSummary) => void;
 }
 
 export function EventDetailModal({
@@ -34,8 +38,10 @@ export function EventDetailModal({
   onClose,
   onEdit,
   onDeleted,
+  onRsvpChange,
 }: EventDetailModalProps) {
   const { isAdmin } = useIsAdmin();
+  const [pending, setPending] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +63,22 @@ export function EventDetailModal({
 
   const startDate = new Date(event.startTime);
   const endDate = new Date(event.endTime);
+  const isPast = endDate.getTime() < Date.now();
+
+  const handleRsvpToggle = async () => {
+    if (pending || isPast) return;
+    setPending(true);
+    try {
+      const summary = event.isAttending
+        ? await EventService.unrsvp(event.eventId)
+        : await EventService.rsvp(event.eventId);
+      onRsvpChange?.(event.eventId, summary);
+    } catch (err) {
+      console.error("Failed to update RSVP", err);
+    } finally {
+      setPending(false);
+    }
+  };
 
   const formatDate = (date: Date) =>
     date.toLocaleDateString("en-US", {
@@ -97,7 +119,25 @@ export function EventDetailModal({
           <Typography variant="body1" sx={{ mt: 1, whiteSpace: "pre-wrap" }}>
             {event.description}
           </Typography>
-          {error && <Alert severity="error">{error}</Alert>}
+
+          <Box sx={{ mt: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+              <PeopleAltOutlinedIcon fontSize="small" color="action" />
+              <Typography variant="subtitle2">
+                {event.rsvpCount === 1
+                  ? "1 person attending"
+                  : `${event.rsvpCount} people attending`}
+              </Typography>
+            </Box>
+            {event.attendees && event.attendees.length > 0 && (
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+                {event.attendees.map((name) => (
+                  <Chip key={name} label={name} size="small" variant="outlined" />
+                ))}
+              </Stack>
+            )}
+          </Box>
+          {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
         </Box>
       </DialogContent>
       <DialogActions>
@@ -117,6 +157,14 @@ export function EventDetailModal({
             </Button>
           </>
         )}
+        <Button
+          variant={event.isAttending ? "contained" : "outlined"}
+          color="primary"
+          disabled={pending || deleting || isPast}
+          onClick={handleRsvpToggle}
+        >
+          {isPast ? "Event ended" : event.isAttending ? "Going" : "I'm going"}
+        </Button>
         <Button onClick={onClose} disabled={deleting}>
           Close
         </Button>

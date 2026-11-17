@@ -343,6 +343,15 @@ Resources:
                 Resource:
                   - !GetAtt EventsTable.Arn
                   - !Sub '${EventsTable.Arn}/index/*'
+              # Read-only on the members table: resolve the caller's memberId from
+              # the token sub (CognitoSubIndex) and join RSVP ids to attendee names.
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt MembersTable.Arn
+                  - !Sub '${MembersTable.Arn}/index/*'
 
   MembersLambdaRole:
     Type: AWS::IAM::Role
@@ -507,6 +516,18 @@ Resources:
           Properties:
             ApiId: !Ref GardenClubApi
             Path: /events/{id}
+            Method: DELETE
+        AddRsvp:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /events/{id}/rsvp
+            Method: POST
+        RemoveRsvp:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /events/{id}/rsvp
             Method: DELETE
 
   MembersFunction:

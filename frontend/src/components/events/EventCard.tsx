@@ -1,17 +1,39 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, Typography, Box, Button } from "@mui/material";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
-import { Event } from "@/types/event";
+import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
+import { Event, RsvpSummary } from "@/types/event";
+import { EventService } from "@/services/eventService";
 
 interface EventCardProps {
   event: Event;
   onClick: () => void;
+  onRsvpChange?: (eventId: string, summary: RsvpSummary) => void;
 }
 
-export function EventCard({ event, onClick }: EventCardProps) {
+export function EventCard({ event, onClick, onRsvpChange }: EventCardProps) {
+  const [pending, setPending] = useState(false);
   const startDate = new Date(event.startTime);
   const endDate = new Date(event.endTime);
+  const isPast = endDate.getTime() < Date.now();
+
+  const handleRsvpToggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (pending || isPast) return;
+    setPending(true);
+    try {
+      const summary = event.isAttending
+        ? await EventService.unrsvp(event.eventId)
+        : await EventService.rsvp(event.eventId);
+      onRsvpChange?.(event.eventId, summary);
+    } catch (err) {
+      console.error("Failed to update RSVP", err);
+    } finally {
+      setPending(false);
+    }
+  };
 
   const month = startDate.toLocaleString("en-US", { month: "short" });
   const day = startDate.getDate();
@@ -73,17 +95,34 @@ export function EventCard({ event, onClick }: EventCardProps) {
           {event.description.length > 80 ? "..." : ""}
         </Typography>
       </CardContent>
-      {/* TODO: Add RSVP button */}
-      {/* <Box sx={{ display: "flex", alignItems: "center", pr: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 0.75,
+          pr: 2,
+          pl: 1,
+        }}
+      >
         <Button
-          variant="outlined"
+          variant={event.isAttending ? "contained" : "outlined"}
           color="primary"
           size="small"
-          onClick={(e) => e.stopPropagation()}
+          disabled={pending || isPast}
+          onClick={handleRsvpToggle}
+          sx={{ whiteSpace: "nowrap", minWidth: 96 }}
         >
-          RSVP
+          {isPast ? "Ended" : event.isAttending ? "Going" : "I'm going"}
         </Button>
-      </Box> */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <PeopleAltOutlinedIcon sx={{ fontSize: 14, color: "text.secondary" }} />
+          <Typography variant="caption" color="text.secondary">
+            {event.rsvpCount}
+          </Typography>
+        </Box>
+      </Box>
     </Card>
   );
 }

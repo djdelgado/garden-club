@@ -1,7 +1,7 @@
 "use client";
 
 import { Grid } from "@mui/material";
-import { Event } from "@/types/event";
+import { Event, RsvpSummary } from "@/types/event";
 import { EventCard } from "./EventCard";
 import { EventCardSkeleton } from "@/components/common/EventCardSkeleton";
 
@@ -9,12 +9,14 @@ interface EventListProps {
   events: Event[];
   loading?: boolean;
   onEventClick: (eventId: string) => void;
+  onRsvpChange?: (eventId: string, summary: RsvpSummary) => void;
 }
 
 export function EventList({
   events,
   loading = false,
   onEventClick,
+  onRsvpChange,
 }: EventListProps) {
   if (loading) {
     return (
@@ -35,6 +37,7 @@ export function EventList({
           <EventCard
             event={event}
             onClick={() => onEventClick(event.eventId)}
+            onRsvpChange={onRsvpChange}
           />
         </Grid>
       ))}
