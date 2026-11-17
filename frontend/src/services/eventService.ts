@@ -1,5 +1,5 @@
 import { Event } from '@/types/event';
-import { apiGet, apiPost } from '../lib/api';
+import { apiGet, apiPost, apiPut, apiDelete } from '../lib/api';
 
 const EVENT_PATH = "/events";
 
@@ -12,5 +12,13 @@ export const EventService = {
 
   createEvent: async (event: Record<string, unknown>) => {
     await apiPost(EVENT_PATH, event);
+  },
+
+  updateEvent: async (id: string, patch: Record<string, unknown>) => {
+    await apiPut(`${EVENT_PATH}/${id}`, patch);
+  },
+
+  deleteEvent: async (id: string) => {
+    await apiDelete(`${EVENT_PATH}/${id}`);
   },
 };

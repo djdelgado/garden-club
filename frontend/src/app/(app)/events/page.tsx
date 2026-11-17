@@ -33,6 +33,7 @@ function EventsContent() {
   const [error, setError] = useState<string | null>(null);
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [editEvent, setEditEvent] = useState<Event | null>(null);
   const showSkeleton = useDelayedFlag(loading);
 
   useEffect(() => {
@@ -68,6 +69,16 @@ function EventsContent() {
   const handleEventClick = (eventId: string) => {
     const event = events.find((e) => e.eventId === eventId) ?? null;
     setSelectedEvent(event);
+  };
+
+  const handleEditEvent = (event: Event) => {
+    setSelectedEvent(null);
+    setEditEvent(event);
+  };
+
+  const handleEventDeleted = () => {
+    setSelectedEvent(null);
+    loadEvents();
   };
 
   const handleViewChange = (
@@ -160,8 +171,19 @@ function EventsContent() {
             <CreateEventModal
               open={openCreateModal}
               onClose={() => setOpenCreateModal(false)}
-              onEventCreated={() => {
+              onEventSaved={() => {
                 setOpenCreateModal(false);
+                loadEvents();
+              }}
+            />
+
+            <CreateEventModal
+              open={!!editEvent}
+              isEdit
+              event={editEvent}
+              onClose={() => setEditEvent(null)}
+              onEventSaved={() => {
+                setEditEvent(null);
                 loadEvents();
               }}
             />
@@ -171,6 +193,8 @@ function EventsContent() {
         <EventDetailModal
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
+          onEdit={handleEditEvent}
+          onDeleted={handleEventDeleted}
         />
       </Box>
     </Container>
