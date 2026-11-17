@@ -87,6 +87,23 @@ def get_claims(event: Dict[str, Any]) -> Dict[str, Any]:
     return claims
 
 
+def parse_groups(claims: Dict[str, Any]) -> List[str]:
+    """Parse cognito:groups. HTTP API emits a bracketed string: "[Admins]" or
+    "[Admins, Editors]" — a naive split on "," would never match."""
+    groups = claims.get("cognito:groups", "")
+    if isinstance(groups, list):
+        return [str(g).strip() for g in groups]
+    text = str(groups).strip()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    return [g.strip() for g in text.split(",") if g.strip()]
+
+
+def is_admin(event: Dict[str, Any]) -> bool:
+    """Check whether the caller belongs to the Cognito Admins group."""
+    return "Admins" in parse_groups(get_claims(event))
+
+
 def find_member_by_sub(sub: str) -> Optional[MemberItem]:
     """Resolve a member row from the token sub via CognitoSubIndex (no scan).
 
@@ -343,14 +360,20 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 return get_events(event)
 
         elif method == "POST":
+            if not is_admin(event):
+                return format_response(403, {"error": "Admin access required"})
             user_id = get_user_id(event)
             return create_event(body, user_id)
 
         elif method == "PUT":
+            if not is_admin(event):
+                return format_response(403, {"error": "Admin access required"})
             event_id = path.split("/")[-1]
             return update_event(event_id, body, event)
 
         elif method == "DELETE":
+            if not is_admin(event):
+                return format_response(403, {"error": "Admin access required"})
             event_id = path.split("/")[-1]
             return delete_event(event_id)
 
