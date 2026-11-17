@@ -423,6 +423,8 @@ Resources:
                   - dynamodb:PutItem
                   - dynamodb:DeleteItem
                   - dynamodb:UpdateItem
+                  # batch_writer() flushes via BatchWriteItem
+                  - dynamodb:BatchWriteItem
                   - dynamodb:GetItem
                 Resource:
                   - !GetAtt ImagesTable.Arn
@@ -459,6 +461,8 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
+                  # batch_writer() flushes via BatchWriteItem
+                  - dynamodb:BatchWriteItem
                   - dynamodb:Query
                 Resource:
                   - !GetAtt ImagesTable.Arn
