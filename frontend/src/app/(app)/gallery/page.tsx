@@ -25,6 +25,7 @@ import { CreateAlbumDialog } from "@/components/gallery/CreateAlbumDialog";
 import { ImageGrid } from "@/components/gallery/ImageGrid";
 import { ImageTileSkeleton } from "@/components/common/ImageTileSkeleton";
 import { ImageService } from "@/services/imageService";
+import { useGalleryColumns } from "@/hooks/useGalleryColumns";
 
 function AlbumList() {
   const router = useRouter();
@@ -141,6 +142,7 @@ function AlbumDetail({ folderName }: { folderName: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const showSkeleton = useDelayedFlag(loading);
+  const cols = useGalleryColumns();
 
   useEffect(() => {
     const loadImages = async () => {
@@ -184,7 +186,7 @@ function AlbumDetail({ folderName }: { folderName: string }) {
         )}
 
         {loading ? (
-          <ImageList cols={3} gap={8}>
+          <ImageList cols={cols} gap={8}>
             {showSkeleton &&
               Array.from({ length: 9 }).map((_, index) => (
                 <ImageListItem key={index}>
