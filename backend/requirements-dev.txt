@@ -1,0 +1,4 @@
+# Test-only dependencies. The Lambda runtime deps are in requirements.txt;
+# install both to run the suite:
+#   pip install -r requirements.txt -r requirements-dev.txt
+pytest==8.3.4
