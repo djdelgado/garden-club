@@ -32,3 +32,18 @@ export interface UpdateMemberInput {
   address?: string;
   role?: MemberRole;
 }
+
+// PUT /members/me — self-service. The backend rejects any other field
+// (email, role, status, ids), so the profile form never offers them.
+export interface UpdateMeInput {
+  name?: string;
+  phone?: string;
+  address?: string;
+  photoKey?: string;
+}
+
+// POST /members/me/photo response: a presigned S3 PUT plus the key to save.
+export interface MemberPhotoUpload {
+  uploadUrl: string;
+  photoKey: string;
+}
