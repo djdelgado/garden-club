@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -19,18 +19,23 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { ImageService } from "@/services/imageService";
 import { EventService } from "@/services/eventService";
+import { Event } from "@/types/event";
 import { v4 as uuidv4 } from "uuid";
 
 interface CreateEventModalProps {
   open: boolean;
+  isEdit?: boolean;
+  event?: Event | null;
   onClose: () => void;
-  onEventCreated: () => void;
+  onEventSaved: () => void;
 }
 
 export function CreateEventModal({
   open,
+  isEdit = false,
+  event,
   onClose,
-  onEventCreated,
+  onEventSaved,
 }: CreateEventModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -44,6 +49,17 @@ export function CreateEventModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open && isEdit && event) {
+      setTitle(event.title);
+      setDescription(event.description);
+      setStartTime(new Date(event.startTime));
+      setEndTime(new Date(event.endTime));
+      setBannerKey(event.headerImageKey ?? null);
+      setBannerFile(null);
+    }
+  }, [open, isEdit, event]);
 
   const handleBannerSelect = async (file: File) => {
     setBannerFile(file);
@@ -62,7 +78,7 @@ export function CreateEventModal({
     }
   };
 
-  const handleCreate = async () => {
+  const handleSubmit = async () => {
     if (!title.trim() || !description.trim() || !startTime || !endTime) {
       setError("Please fill in all required fields");
       return;
@@ -72,23 +88,28 @@ export function CreateEventModal({
       setLoading(true);
       setError(null);
 
-      const newEvent: Record<string, unknown> = {
-        eventId: uuidv4(),
+      const payload: Record<string, unknown> = {
         title,
         description,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
+        headerImageKey: bannerKey ?? undefined,
       };
 
-      if (bannerKey) {
-        newEvent.headerImageKey = bannerKey;
+      if (isEdit && event) {
+        await EventService.updateEvent(event.eventId, payload);
+      } else {
+        await EventService.createEvent({ eventId: uuidv4(), ...payload });
       }
 
-      await EventService.createEvent(newEvent);
-      onEventCreated();
+      onEventSaved();
       handleClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create event");
+      setError(
+        err instanceof Error
+          ? err.message
+          : `Failed to ${isEdit ? "update" : "create"} event`
+      );
     } finally {
       setLoading(false);
     }
@@ -107,7 +128,7 @@ export function CreateEventModal({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Create New Event</DialogTitle>
+      <DialogTitle>{isEdit ? "Edit Event" : "Create New Event"}</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2 }}>
           {error && <Alert severity="error">{error}</Alert>}
@@ -185,12 +206,18 @@ export function CreateEventModal({
           Cancel
         </Button>
         <Button
-          onClick={handleCreate}
+          onClick={handleSubmit}
           variant="contained"
           disabled={loading || bannerUploading}
           startIcon={loading ? <CircularProgress size={20} /> : undefined}
         >
-          {loading ? "Creating..." : "Create Event"}
+          {loading
+            ? isEdit
+              ? "Saving..."
+              : "Creating..."
+            : isEdit
+            ? "Save changes"
+            : "Create Event"}
         </Button>
       </DialogActions>
     </Dialog>

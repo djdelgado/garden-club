@@ -9,23 +9,47 @@ import {
   Avatar,
   IconButton,
   Typography,
+  Menu,
+  MenuItem,
+  ListItemIcon,
 } from "@mui/material";
 import LogoutIcon from "@mui/icons-material/Logout";
+import PersonIcon from "@mui/icons-material/PersonOutlined";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "aws-amplify/auth";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsAdmin } from "@/hooks/useIsAdmin";
+import { clearTokenCache } from "@/lib/api";
 
-const NAV_LINKS = [
+const BASE_LINKS = [
   { label: "Home", href: "/home" },
   { label: "Events", href: "/events" },
   { label: "Gallery", href: "/gallery" },
+  { label: "Directory", href: "/directory" },
 ];
+
+const ADMIN_LINKS = [{ label: "Members", href: "/admin/members" }];
 
 export function TopNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { isAdmin, loading: adminLoading } = useIsAdmin();
+
+  // Gate on !adminLoading so the admin link never flashes before the group
+  // check resolves.
+  const navLinks = isAdmin && !adminLoading ? [...BASE_LINKS, ...ADMIN_LINKS] : BASE_LINKS;
   const [initials, setInitials] = useState("");
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const menuOpen = Boolean(anchorEl);
+
+  const handleAvatarClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
 
   useEffect(() => {
     if (user) {
@@ -40,8 +64,10 @@ export function TopNav() {
   }, [user]);
 
   const handleSignOut = async () => {
+    handleMenuClose();
     try {
       await signOut();
+      clearTokenCache();
       router.push("/signin");
     } catch (error) {
       console.error("Sign out error:", error);
@@ -75,10 +101,10 @@ export function TopNav() {
             </div>
           </Typography>
         </Box>
-        <Box>
+
         {/* Nav links */}
         <Box sx={{ display: "flex", gap: 1, flex: 1 }}>
-          {NAV_LINKS.map((link) => {
+          {navLinks.map((link) => {
             const active = pathname.startsWith(link.href);
             return (
               <Button
@@ -100,18 +126,50 @@ export function TopNav() {
           })}
         </Box>
 
-        {/* User avatar + sign out */}
+        {/* User avatar with dropdown */}
         {!loading && user && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <Avatar sx={{ bgcolor: "primary.main", width: 34, height: 34, fontSize: 14 }}>
-              {initials}
-            </Avatar>
-            <IconButton onClick={handleSignOut} size="small" title="Sign out" color="inherit">
-              <LogoutIcon fontSize="small" />
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <IconButton
+              onClick={handleAvatarClick}
+              size="small"
+              aria-label="Account menu"
+              aria-controls={menuOpen ? "account-menu" : undefined}
+              aria-haspopup="true"
+              aria-expanded={menuOpen ? "true" : undefined}
+            >
+              <Avatar sx={{ bgcolor: "primary.main", width: 34, height: 34, fontSize: 14 }}>
+                {initials}
+              </Avatar>
             </IconButton>
+            <Menu
+              id="account-menu"
+              anchorEl={anchorEl}
+              open={menuOpen}
+              onClose={handleMenuClose}
+              anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+              transformOrigin={{ vertical: "top", horizontal: "right" }}
+            >
+              <MenuItem
+                onClick={() => {
+                  handleMenuClose();
+                  router.push("/profile");
+                }}
+                selected={pathname.startsWith("/profile")}
+              >
+                <ListItemIcon>
+                  <PersonIcon fontSize="small" />
+                </ListItemIcon>
+                My profile
+              </MenuItem>
+              <MenuItem onClick={handleSignOut}>
+                <ListItemIcon>
+                  <LogoutIcon fontSize="small" />
+                </ListItemIcon>
+                Log out
+              </MenuItem>
+            </Menu>
           </Box>
         )}
-        </Box>
       </Toolbar>
     </AppBar>
   );

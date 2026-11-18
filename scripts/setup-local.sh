@@ -61,6 +61,47 @@ awslocal dynamodb create-table \
 
 echo -e "${GREEN}✓ Images table created${NC}"
 
+awslocal dynamodb create-table \
+  --table-name GardenClubFolders \
+  --attribute-definitions \
+    AttributeName=folderName,AttributeType=S \
+  --key-schema \
+    AttributeName=folderName,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  2>/dev/null || echo "Folders table already exists"
+
+echo -e "${GREEN}✓ Folders table created${NC}"
+
+awslocal dynamodb create-table \
+  --table-name GardenClubMembers \
+  --attribute-definitions \
+    AttributeName=memberId,AttributeType=S \
+    AttributeName=cognitoSub,AttributeType=S \
+    AttributeName=emailLower,AttributeType=S \
+  --key-schema \
+    AttributeName=memberId,KeyType=HASH \
+  --global-secondary-indexes \
+    "IndexName=CognitoSubIndex,KeySchema=[{AttributeName=cognitoSub,KeyType=HASH}],Projection={ProjectionType=ALL}" \
+    "IndexName=EmailIndex,KeySchema=[{AttributeName=emailLower,KeyType=HASH}],Projection={ProjectionType=ALL}" \
+  --billing-mode PAY_PER_REQUEST \
+  2>/dev/null || echo "Members table already exists"
+
+echo -e "${GREEN}✓ Members table created${NC}"
+
+awslocal dynamodb create-table \
+  --table-name GardenClubDirectory \
+  --attribute-definitions \
+    AttributeName=entryId,AttributeType=S \
+    AttributeName=emailLower,AttributeType=S \
+  --key-schema \
+    AttributeName=entryId,KeyType=HASH \
+  --global-secondary-indexes \
+    "IndexName=EmailIndex,KeySchema=[{AttributeName=emailLower,KeyType=HASH}],Projection={ProjectionType=ALL}" \
+  --billing-mode PAY_PER_REQUEST \
+  2>/dev/null || echo "Directory table already exists"
+
+echo -e "${GREEN}✓ Directory table created${NC}"
+
 echo -e "${BLUE}Creating S3 bucket...${NC}"
 
 awslocal s3 mb s3://garden-club-images 2>/dev/null || echo "Bucket already exists"

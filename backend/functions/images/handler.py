@@ -1,7 +1,7 @@
 import json
 import os
-from typing import Any, Dict
-from urllib.parse import parse_qs
+from typing import Any, Dict, List
+from urllib.parse import parse_qs, quote
 
 import boto3
 from aws_lambda_powertools import Logger
@@ -19,7 +19,88 @@ dynamodb = boto3.resource("dynamodb", **aws_kwargs)
 s3_client = boto3.client("s3", **aws_kwargs)
 
 images_table = dynamodb.Table(os.environ.get("IMAGES_TABLE_NAME", "GardenClubImages"))
+folders_table = dynamodb.Table(os.environ.get("FOLDERS_TABLE_NAME", "GardenClubFolders"))
 images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
+images_cdn_domain = os.environ.get("IMAGES_CDN_DOMAIN", "")
+
+
+def build_image_url(s3_key: str) -> str:
+    """Build a browser-facing URL for an image.
+
+    In AWS, return a stable CloudFront URL (``https://<cdn>/<key>``). Because the
+    key is an immutable UUID path, the URL never changes, so CloudFront and the
+    browser can cache it indefinitely.
+
+    Under LocalStack there is no CloudFront, so fall back to a presigned S3 URL
+    (the per-request signature defeats caching, but that only affects local dev).
+    The fallback is gated on LOCALSTACK_ENDPOINT being set.
+    """
+    if os.environ.get("LOCALSTACK_ENDPOINT"):
+        return s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": images_bucket, "Key": s3_key},
+            ExpiresIn=3600,
+        )
+    # quote each path segment but keep the slashes between them.
+    return f"https://{images_cdn_domain}/{quote(s3_key, safe='/')}"
+
+
+def query_all(table, **kwargs) -> list:
+    """Run a DynamoDB query, following LastEvaluatedKey until the full result
+    set is read. DynamoDB caps each page at 1 MB, so a single query() silently
+    truncates once a folder exceeds that. Local helper for now; a natural home
+    is the shared backend module tracked in #52.
+    """
+    items: list = []
+    while True:
+        response = table.query(**kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            return items
+        kwargs["ExclusiveStartKey"] = last_key
+
+
+def scan_all(table, **kwargs) -> list:
+    """Run a DynamoDB scan, following LastEvaluatedKey until the full result
+    set is read (same 1 MB per-page cap as query_all)."""
+    items: list = []
+    while True:
+        response = table.scan(**kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            return items
+        kwargs["ExclusiveStartKey"] = last_key
+
+
+def adjust_folder_count(folder_name: str, delta: int) -> None:
+    """Atomically bump a folder's imageCount by delta, deleting the metadata
+    item once the folder is empty so it drops out of the listing."""
+    response = folders_table.update_item(
+        Key={"folderName": folder_name},
+        UpdateExpression="ADD imageCount :delta",
+        ExpressionAttributeValues={":delta": delta},
+        ReturnValues="UPDATED_NEW",
+    )
+    new_count = response.get("Attributes", {}).get("imageCount", 0)
+    if new_count <= 0:
+        folders_table.delete_item(Key={"folderName": folder_name})
+
+
+def set_folder_thumbnail(folder_name: str, thumbnail_key: str) -> None:
+    """Point a folder's metadata item at a new thumbnail s3Key. No-op if the
+    folder item no longer exists (e.g. it was just emptied), so we never
+    resurrect an empty folder with a dangling thumbnail."""
+    try:
+        folders_table.update_item(
+            Key={"folderName": folder_name},
+            UpdateExpression="SET thumbnailKey = :key",
+            ConditionExpression="attribute_exists(folderName)",
+            ExpressionAttributeValues={":key": thumbnail_key},
+        )
+    except folders_table.meta.client.exceptions.ConditionalCheckFailedException:
+        pass
 
 
 def format_response(status_code: int, body: Any) -> Dict[str, Any]:
@@ -31,6 +112,51 @@ def format_response(status_code: int, body: Any) -> Dict[str, Any]:
         },
         "body": json.dumps(body, default=str),
     }
+
+
+def get_claims(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract JWT claims (HTTP API v2 path: requestContext.authorizer.jwt.claims).
+
+    Local escape hatch: when running against LocalStack (which has no Cognito and
+    where sam local doesn't emulate the JWT authorizer) fall back to LOCAL_DEV_CLAIMS.
+    Double-gated on LOCALSTACK_ENDPOINT so a Lambda in AWS — which never has it — can
+    never take this branch. This is an env-gated auth bypass; it logs loudly.
+    """
+    claims = (
+        event.get("requestContext", {})
+        .get("authorizer", {})
+        .get("jwt", {})
+        .get("claims", {})
+    ) or {}
+
+    if not claims and os.environ.get("LOCALSTACK_ENDPOINT") and os.environ.get("LOCAL_DEV_CLAIMS"):
+        logger.warning(
+            "⚠️ LOCAL_DEV_CLAIMS auth bypass ACTIVE — trusting env-provided claims. "
+            "This must only ever happen in local dev against LocalStack."
+        )
+        try:
+            claims = json.loads(os.environ["LOCAL_DEV_CLAIMS"])
+        except json.JSONDecodeError:
+            logger.exception("Failed to parse LOCAL_DEV_CLAIMS")
+
+    return claims
+
+
+def parse_groups(claims: Dict[str, Any]) -> List[str]:
+    """Parse cognito:groups. HTTP API emits a bracketed string: "[Admins]" or
+    "[Admins, Editors]" — a naive split on "," would never match."""
+    groups = claims.get("cognito:groups", "")
+    if isinstance(groups, list):
+        return [str(g).strip() for g in groups]
+    text = str(groups).strip()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    return [g.strip() for g in text.split(",") if g.strip()]
+
+
+def is_admin(event: Dict[str, Any]) -> bool:
+    """Check whether the caller belongs to the Cognito Admins group."""
+    return "Admins" in parse_groups(get_claims(event))
 
 
 def get_query_params(event: Dict[str, Any]) -> Dict[str, str]:
@@ -45,75 +171,56 @@ def get_query_params(event: Dict[str, Any]) -> Dict[str, str]:
 
 
 def get_all_folders() -> Dict[str, Any]:
-    """GET /images/folders - Get all image folders with metadata"""
+    """GET /images/folders - Get all image folders with metadata.
+
+    Reads the small GardenClubFolders table (one item per folder) instead of
+    scanning every image, so cost/latency scale with the number of folders.
+    """
     try:
-        # Scan DynamoDB to get all images
-        response = images_table.scan()
-        items: list[ImageItem] = response.get("Items", [])
+        folder_items: list[dict] = scan_all(folders_table)
 
-        # Group by folder and extract thumbnail info
-        folders_dict: Dict[str, FolderMetadata] = {}
-        for item in items:
+        folders: list[FolderMetadata] = []
+        for item in folder_items:
             folder_name = item.get("folderName")
-            if folder_name:
-                if folder_name not in folders_dict:
-                    folder_meta: FolderMetadata = {
-                        "folderName": folder_name,
-                        "imageCount": 0,
-                    }
-                    folders_dict[folder_name] = folder_meta
+            if not folder_name:
+                continue
+            meta: FolderMetadata = {
+                "folderName": folder_name,
+                "imageCount": int(item.get("imageCount", 0)),
+            }
+            thumbnail_key = item.get("thumbnailKey")
+            if thumbnail_key:
+                meta["thumbnailUrl"] = build_image_url(thumbnail_key)
+            folders.append(meta)
 
-                folders_dict[folder_name]["imageCount"] += 1
-
-                # Use first image marked as thumbnail
-                if item.get("isThumbnail") and "thumbnailUrl" not in folders_dict[folder_name]:
-                    s3_key = item.get("s3Key")
-                    if s3_key:
-                        # Generate presigned URL for thumbnail (valid for 1 hour)
-                        thumbnail_url = s3_client.generate_presigned_url(
-                            "get_object",
-                            Params={"Bucket": images_bucket, "Key": s3_key},
-                            ExpiresIn=3600,
-                        )
-                        folders_dict[folder_name]["thumbnailUrl"] = thumbnail_url
-
-        folders = list(folders_dict.values())
         return format_response(200, {"folders": folders})
     except Exception as err:
         logger.exception("Error getting folders")
         return format_response(500, {"error": str(err)})
 
 
-def get_images() -> Dict[str, Any]:
-    """GET /images - Get all images (for testing)"""
-    try:
-        response = images_table.scan()
-        items: list[ImageItem] = response.get("Items", [])
-        return format_response(200, items)
-    except Exception as err:
-        logger.exception("Error getting images")
-        return format_response(500, {"error": str(err)})
-
-
 def get_images_by_folder(folder_name: str) -> Dict[str, Any]:
     """GET /images?folderName={name} - Get images for a folder"""
     try:
-        response = images_table.query(
+        items: list[ImageItem] = query_all(
+            images_table,
             IndexName="FolderNameIndex",
             KeyConditionExpression="folderName = :folder_name",
             FilterExpression="#s = :status_val",
+            # Project only what the gallery renders; uploadedBy/status are unused
+            # on the wire (the query already filters to READY).
+            ProjectionExpression="imageId, folderName, s3Key, thumbKey, fileName, uploadedAt, isThumbnail",
             ExpressionAttributeNames={"#s": "status"},
             ExpressionAttributeValues={":folder_name": folder_name, ":status_val": "READY"},
         )
-        items: list[ImageItem] = response.get("Items", [])
         for item in items:
             s3_key = item.get("s3Key")
             if s3_key:
-                item["imageUrl"] = s3_client.generate_presigned_url(
-                    "get_object",
-                    Params={"Bucket": images_bucket, "Key": s3_key},
-                    ExpiresIn=3600,
-                )
+                item["imageUrl"] = build_image_url(s3_key)
+            # Thumbnail for grid rendering; fall back to the original for images
+            # uploaded before thumbnails existed.
+            thumb_key = item.get("thumbKey")
+            item["thumbUrl"] = build_image_url(thumb_key) if thumb_key else item.get("imageUrl")
         return format_response(200, {"images": items})
     except Exception as err:
         logger.exception(f"Error getting images for folder {folder_name}")
@@ -130,15 +237,25 @@ def delete_image(image_id: str) -> Dict[str, Any]:
 
         item: ImageItem = response["Item"]
         s3_key = item.get("s3Key")
+        thumb_key = item.get("thumbKey")
         folder_name = item.get("folderName")
         is_thumbnail = item.get("isThumbnail", False)
+        was_ready = item.get("status") == "READY"
 
         if s3_key:
             s3_client.delete_object(Bucket=images_bucket, Key=s3_key)
+        if thumb_key:
+            s3_client.delete_object(Bucket=images_bucket, Key=thumb_key)
 
         images_table.delete_item(Key={"imageId": image_id})
 
-        # If this was the thumbnail, mark the next image as thumbnail
+        # The folder counter tracks READY images only, so only decrement when a
+        # READY image is removed (and may delete the folder item once empty).
+        if folder_name and was_ready:
+            adjust_folder_count(folder_name, -1)
+
+        # If this was the thumbnail, promote the next image and keep the folder
+        # metadata's thumbnailKey in lockstep so the listing never dangles.
         if is_thumbnail and folder_name:
             remaining = images_table.query(
                 IndexName="FolderNameIndex",
@@ -153,6 +270,9 @@ def delete_image(image_id: str) -> Dict[str, Any]:
                     UpdateExpression="SET isThumbnail = :val",
                     ExpressionAttributeValues={":val": True},
                 )
+                next_key = next_image.get("thumbKey") or next_image.get("s3Key")
+                if next_key:
+                    set_folder_thumbnail(folder_name, next_key)
 
         return format_response(204, {})
 
@@ -163,23 +283,29 @@ def delete_image(image_id: str) -> Dict[str, Any]:
 def update_folder_name(folder_name: str, new_folder_name: str) -> Dict[str, Any]:
     """PUT /images/folders/{folderName} - Rename a folder across all its images"""
     try:
-        response = images_table.query(
+        items: list[ImageItem] = query_all(
+            images_table,
             IndexName="FolderNameIndex",
             KeyConditionExpression="folderName = :folder_name",
             ExpressionAttributeValues={":folder_name": folder_name},
         )
-        items: list[ImageItem] = response.get("Items", [])
 
         if not items:
             return format_response(404, {"error": "Folder not found"})
 
-        for item in items:
-            images_table.put_item(
-                Item={
-                    **item,
-                    "folderName": new_folder_name
-                }
-            )
+        # Rewrite every image's folderName in bulk; batch_writer buffers and
+        # flushes in batches of 25 instead of one round trip per image.
+        with images_table.batch_writer() as batch:
+            for item in items:
+                batch.put_item(Item={**item, "folderName": new_folder_name})
+
+        # Move the folder metadata item: delete the old one, recreate it under
+        # the new name carrying the same count and thumbnail.
+        old_meta = folders_table.get_item(Key={"folderName": folder_name}).get("Item")
+        if old_meta:
+            new_meta = {**old_meta, "folderName": new_folder_name}
+            folders_table.put_item(Item=new_meta)
+            folders_table.delete_item(Key={"folderName": folder_name})
 
         return format_response(200, {"updated": len(items), "folderName": new_folder_name})
 
@@ -191,22 +317,37 @@ def update_folder_name(folder_name: str, new_folder_name: str) -> Dict[str, Any]
 def delete_folder(folder_name: str) -> Dict[str, Any]:
     """DELETE /images/folders/{folderName} - Delete folder and all images"""
     try:
-        response = images_table.query(
+        items: list[ImageItem] = query_all(
+            images_table,
             IndexName="FolderNameIndex",
             KeyConditionExpression="folderName = :folder_name",
             ExpressionAttributeValues={":folder_name": folder_name},
         )
-        items: list[ImageItem] = response.get("Items", [])
 
         if not items:
             return format_response(404, {"error": "Folder not found"})
 
-        for item in items:
-            image_id = item["imageId"]
-            s3_key = item.get("s3Key")
-            if s3_key:
-                s3_client.delete_object(Bucket=images_bucket, Key=s3_key)
-            images_table.delete_item(Key={"imageId": image_id})
+        # Batch the S3 deletes (up to 1000 keys per delete_objects call) instead
+        # of one delete_object per image.
+        s3_keys = [
+            key
+            for item in items
+            for key in (item.get("s3Key"), item.get("thumbKey"))
+            if key
+        ]
+        for i in range(0, len(s3_keys), 1000):
+            chunk = s3_keys[i:i + 1000]
+            s3_client.delete_objects(
+                Bucket=images_bucket,
+                Delete={"Objects": [{"Key": key} for key in chunk]},
+            )
+
+        # Batch the DynamoDB deletes (25 per flush) via batch_writer.
+        with images_table.batch_writer() as batch:
+            for item in items:
+                batch.delete_item(Key={"imageId": item["imageId"]})
+
+        folders_table.delete_item(Key={"folderName": folder_name})
 
         return format_response(204, {})
 
@@ -222,6 +363,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     path = event.get("rawPath", "")
 
     try:
+        # Mutations (delete image, delete/rename folder) are Admins-only; the
+        # GET listings stay open to any authenticated member.
+        if method in ("DELETE", "PUT") and not is_admin(event):
+            logger.warning("Denied non-admin %s %s", method, path)
+            return format_response(403, {"error": "Admin access required"})
+
         if method == "GET":
             # Check if requesting folders list
             if path.endswith("/folders"):
@@ -231,7 +378,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             folder_name = params.get("folderName")
 
             if not folder_name:
-                return get_images()  # Return all images if no folderName provided
+                # The unfiltered listing (every raw item, PENDING included) is
+                # not used by the frontend and leaks the whole table; require a
+                # folderName instead.
+                return format_response(400, {"error": "Missing required query parameter: folderName"})
 
             return get_images_by_folder(folder_name)
         elif method == "DELETE" and "/folders/" in path:

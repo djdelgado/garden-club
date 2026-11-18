@@ -1,50 +1,35 @@
 "use client";
 
-import { Authenticator } from "@aws-amplify/ui-react";
-import "@aws-amplify/ui-react/styles.css";
-import { Box, Container } from "@mui/material";
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { fetchAuthSession } from "aws-amplify/auth";
+import { useRouter } from "next/navigation";
+import { Box, CircularProgress } from "@mui/material";
 
+/**
+ * Public self-service signup is closed: members are created by admins, and the
+ * user pool sets AdminCreateUserConfig.AllowAdminCreateUserOnly, so Cognito
+ * rejects public SignUp calls outright.
+ *
+ * The route is kept as a redirect rather than deleted so an existing bookmark
+ * lands on the sign-in page instead of a CloudFront 404. The app is a static
+ * export, so there is no middleware to do this server-side.
+ */
 export default function SignUpPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        await fetchAuthSession();
-        router.push("/home");
-      } catch {
-        // Not authenticated, show signup form
-      }
-    };
-
-    checkAuth();
+    router.replace("/signin");
   }, [router]);
 
   return (
-    <Container maxWidth="sm">
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-        }}
-      >
-        <Box sx={{ width: "100%" }}>
-          <Authenticator>
-            {({ signOut, user }) => (
-              <Box>
-                <p>Welcome, {user?.username}!</p>
-                <button onClick={signOut}>Sign out</button>
-              </Box>
-            )}
-          </Authenticator>
-        </Box>
-      </Box>
-    </Container>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "100vh",
+      }}
+    >
+      <CircularProgress />
+    </Box>
   );
 }

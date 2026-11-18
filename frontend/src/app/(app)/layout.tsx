@@ -17,10 +17,10 @@ export default function AppLayout({
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // const session = await fetchAuthSession();
-        // if (!session.tokens) {
-        //   throw new Error("No active session");
-        // }
+        const session = await fetchAuthSession();
+        if (!session.tokens) {
+          throw new Error("No active session");
+        }
         setChecking(false);
       } catch {
         router.replace("/signin");
@@ -30,20 +30,20 @@ export default function AppLayout({
     checkAuth();
   }, [router]);
 
-  // if (checking) {
-  //   return (
-  //     <Box
-  //       sx={{
-  //         display: "flex",
-  //         alignItems: "center",
-  //         justifyContent: "center",
-  //         minHeight: "100vh",
-  //       }}
-  //     >
-  //       <CircularProgress />
-  //     </Box>
-  //   );
-  // }
+  if (checking) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return <AppShell>{children}</AppShell>;
 }

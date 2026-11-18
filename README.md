@@ -4,17 +4,16 @@ A community garden club web application where members can view events and browse
 
 ## Project Overview
 
-- **Frontend**: Next.js 15 with TypeScript, Material UI, Tailwind CSS, and AWS Amplify Auth
+- **Frontend**: Next.js 15 with TypeScript, Material UI, Tailwind CSS, and AWS Amplify Auth. Built as a **static export** and hosted on **Amazon S3 + CloudFront**.
 - **Backend**: AWS Lambda (Python 3.12) with API Gateway, DynamoDB, S3, and Cognito
 - **Infrastructure**: AWS SAM (Serverless Application Model) for IaC
 - **Local Development**: Docker Compose with LocalStack for AWS service emulation
-- **Frontend Hosting**: Docker container deployed to Amazon ECS Express Mode (Fargate)
 
 ## Prerequisites
 
 - Node.js 20+
 - Python 3.12+
-- Docker & Docker Compose
+- Docker & Docker Compose (only required to run LocalStack)
 - AWS SAM CLI: `npm install -g aws-sam-cli`
 - AWS CLI v2
 - LocalStack CLI: `pip install localstack`
@@ -43,9 +42,14 @@ This command:
 - Waits for it to be healthy
 - Creates DynamoDB tables (Events, Images)
 - Creates S3 bucket (garden-club-images)
-- Creates Cognito User Pool and App Client
-- Creates a test admin user
 - Exports credentials to `.env.local`
+
+> **Note:** LocalStack Community does **not** include Cognito, so real
+> authentication (sign-in, admin checks, JWTs) cannot be exercised locally. To
+> develop against real auth, use `npm run dev:remote`, which points
+> `frontend/.env.local` at the deployed `garden-club-dev` stack (API Gateway URL,
+> User Pool ID, App Client ID, images bucket) and then starts `npm run dev`. This
+> requires AWS credentials with access to the `garden-club-dev` stack.
 
 ### 3. Run Frontend (Terminal 1)
 
@@ -63,46 +67,36 @@ npm run local:api
 
 Backend API will be available at `http://localhost:3001`
 
-### Running the Frontend as a Container (Optional)
-
-After running `npm run local:up` (so `.env.local` exists with the local Cognito IDs), you can build and run the frontend inside Docker:
-
-```bash
-# Loads NEXT_PUBLIC_* from your .env.local shell env and passes them as build args
-set -a && source .env.local && set +a
-docker compose up frontend
-```
-
-The containerized frontend is available at `http://localhost:3000`. This closely mirrors the ECS production environment.
-
 ## Folder Structure
 
 ```
 garden-club/
-├── frontend/                    # Next.js application
+├── frontend/                    # Next.js application (static export → frontend/out/)
 │   ├── src/
-│   │   ├── app/                # App Router structure
+│   │   ├── app/                # App Router structure (route groups (app)/(auth))
 │   │   ├── components/         # React components
 │   │   ├── hooks/              # Custom hooks
 │   │   ├── lib/                # Utilities and config
+│   │   ├── services/           # Business-logic wrappers over lib/api.ts
 │   │   ├── types/              # TypeScript interfaces
-│   │   ├── theme.ts            # MUI theme configuration
-│   │   └── middleware.ts       # Route protection middleware
+│   │   └── theme.ts            # MUI theme configuration
 │   ├── public/                 # Static assets
 │   └── package.json
 ├── backend/                     # AWS SAM project
 │   ├── functions/
 │   │   ├── events/             # Events Lambda handler
 │   │   ├── images/             # Images Lambda handler
+│   │   ├── members/            # Members Lambda handler
 │   │   └── upload/             # Upload presign Lambda handler
 │   ├── template.yaml           # SAM infrastructure template
-│   ├── samconfig.toml          # SAM local configuration
+│   ├── samconfig.toml          # SAM configuration
 │   └── requirements.txt
 ├── scripts/
-│   └── setup-local.sh          # Local development setup
-├── Dockerfile                   # Multi-stage frontend container build
-├── .dockerignore
-└── docker-compose.yml           # LocalStack + optional frontend container
+│   ├── setup-local.sh          # Local development setup (LocalStack resources)
+│   ├── setup-develop.sh        # Pull garden-club-dev stack outputs into .env.local
+│   └── bootstrap-admin.sh      # Create the first Cognito admin for an environment
+├── docker-compose.yml           # LocalStack service for local development
+└── README.md
 ```
 
 ## Authentication
@@ -110,49 +104,184 @@ garden-club/
 The app uses Amazon Cognito for authentication via the `aws-amplify` JS library:
 
 - **Sign In**: Email/password authentication via Amplify Auth
-- **Sign Up**: Create new account with email verification
+- **Sign Up**: Self-service sign-up is **closed** — the user pool sets
+  `AllowAdminCreateUserOnly`, so new members are created by an admin (via the
+  `/admin/members` page, backed by the Admins-only `POST /members` endpoint). The
+  `/signup` route now simply redirects to `/signin`.
+- **First Admin**: Bootstrapped once per environment with
+  `./scripts/bootstrap-admin.sh` (see [Deployment](#deployment)).
 - **Admin Role**: Users in the "Admins" Cognito group have special privileges
   - Can create and manage events
   - Can upload and manage images
+  - Can invite and manage members
 
 ## Key Features
 
 ### For All Users
 - Browse upcoming events with details
-- View photo galleries organized by event
+- View photo galleries organized by folder
 - Browse high-resolution images in a modal viewer
 
 ### For Admin Users
 - Create new events with title, description, date/time
-- Upload images with header images for events
-- Manage image galleries per event
+- Upload images and organize them into folders
+- Invite and manage members
 
 ## Deployment
 
-### Deploy Backend
+Deployments run automatically via GitHub Actions. Branch maps to environment:
+
+| Branch    | Environment | Stack             |
+|-----------|-------------|-------------------|
+| `develop` | `dev`       | `garden-club-dev` |
+| `main`    | `prod`      | `garden-club-prod`|
+
+Both workflows authenticate to AWS with **GitHub OIDC** (no long-lived AWS keys).
+
+### PR checks (`.github/workflows/ci.yml`)
+
+Every pull request into `develop` or `main` (including agent-opened drafts) runs
+a CI gate before merge. It needs no AWS credentials:
+
+- **frontend**: `npm ci`, `npm run lint`, `npx tsc --noEmit`, `npm run build`
+  (with dummy `NEXT_PUBLIC_*` values)
+- **backend**: `sam validate --lint`, `python -m compileall backend/functions`,
+  and `pytest` when `backend/tests/` exists
+
+Each job only runs when its side of the repo changed; a skipped job reports
+success, so both can be **required checks** in branch protection for `develop`
+and `main` without blocking docs-only PRs. Run it by hand from the Actions tab
+(`workflow_dispatch`) to check both sides regardless of what changed.
+
+### Backend (`.github/workflows/deploy-backend.yml`)
+
+On a push to `develop` or `main` that touches `backend/**`, the workflow runs
+`sam build && sam deploy` against the matching environment
+(`sam deploy --config-env dev|prod`).
+
+Manual backend deploy:
 
 ```bash
 cd backend
 sam build
-sam deploy --guided
+sam deploy --config-env dev    # or prod
 ```
 
-### Deploy Frontend → ECS Express Mode
+### Frontend (`.github/workflows/deploy-frontend.yml`)
 
-The frontend is packaged as a Docker container and deployed automatically to Amazon ECS Express Mode (Fargate) via GitHub Actions on every push to `develop` or `main`.
+The frontend is a **static export**. On a push to `develop` or `main` that
+touches `frontend/**`, `package.json`, or `package-lock.json`, the workflow:
 
-See [**Deployment to ECS Express Mode**](#deployment-to-ecs-express-mode) below for the full one-time setup guide.
+1. Runs `npm ci` and `npm run build` (in `frontend/`), producing `frontend/out/`
+   with the environment's `NEXT_PUBLIC_*` values baked in at build time.
+2. Assumes the environment's AWS role via OIDC.
+3. Syncs the build to S3: `aws s3 sync frontend/out/ s3://<bucket> --delete`.
+4. Invalidates the CloudFront distribution (`/*`).
+
+Manual frontend deploy:
+
+```bash
+cd frontend
+npm run build
+aws s3 sync out/ s3://<bucket> --delete
+aws cloudfront create-invalidation --distribution-id <id> --paths "/*"
+```
+
+#### Images CDN (CloudFront)
+
+The images bucket stays fully private and is served to the browser through a
+CloudFront distribution (Origin Access Control). The images Lambda returns
+**stable** `https://<cdn-domain>/<key>` URLs (keys are immutable UUID paths), so
+CloudFront and the browser cache them indefinitely — revisiting an album serves
+photos from cache instead of re-downloading them. Under LocalStack (no
+CloudFront) the handlers fall back to presigned S3 URLs.
+
+After deploying, grab the CloudFront domain from the `ImagesCdnDomain` stack
+output (also printed to the backend deploy job summary) and set the frontend's
+`NEXT_PUBLIC_IMAGES_BASE_URL` secret to `https://<ImagesCdnDomain>`:
+
+```bash
+aws cloudformation describe-stacks --stack-name garden-club-dev \
+  --query "Stacks[0].Outputs[?OutputKey=='ImagesCdnDomain'].OutputValue" --output text
+```
+
+Deleting an image or folder does **not** invalidate the CDN — UUID keys are never
+re-used, so any cached copy of a deleted object is harmless and simply ages out.
+
+### Bootstrap the First Admin
+
+On a freshly deployed stack no admin exists, and `POST /members` is Admins-only —
+so there is no way to create the first admin through the app. Run this **once per
+environment** (`dev`, `prod`) to create a Cognito user and add them to the
+`Admins` group:
+
+```bash
+# By stack name (resolves the UserPoolId output automatically)
+./scripts/bootstrap-admin.sh garden-club-dev admin@example.com
+
+# Or pass a user pool ID directly
+./scripts/bootstrap-admin.sh us-east-1_XXXXXXXXX admin@example.com
+```
+
+The script is idempotent — re-running it for an existing user just ensures group
+membership. It sends a real invite email (`--desired-delivery-mediums EMAIL`), so
+be deliberate about the address you use in `prod`. The bootstrapped user starts in
+`FORCE_CHANGE_PASSWORD` state and must set a new password on first sign-in.
+
+> This only affects real AWS environments. Locally there is no Cognito (LocalStack
+> Community); the members handler falls back to the `LOCAL_DEV_CLAIMS` escape hatch
+> for admin gating.
+
+### GitHub Actions Configuration
+
+Create two GitHub **Environments** (`dev` and `prod`) under **Settings →
+Environments** so secrets can be scoped per environment, then configure:
+
+**Repository variable**
+
+| Name             | Value                      |
+|------------------|----------------------------|
+| `AWS_ACCOUNT_ID` | Your 12-digit AWS account ID |
+
+**Per-environment secrets** (`dev` and `prod`)
+
+| Name                               | Purpose                                                    |
+|------------------------------------|------------------------------------------------------------|
+| `AWS_ROLE_ARN_DEV` / `AWS_ROLE_ARN_PROD` | OIDC role ARN the backend workflow assumes            |
+| `NEXT_PUBLIC_API_BASE_URL`         | API Gateway base URL (baked into the frontend build)       |
+| `NEXT_PUBLIC_IMAGES_BUCKET`        | Images S3 bucket name (used to build the public images URL) |
+| `NEXT_PUBLIC_COGNITO_USER_POOL_ID` | Cognito User Pool ID                                       |
+| `NEXT_PUBLIC_COGNITO_CLIENT_ID`    | Cognito App Client ID                                      |
+| `S3_BUCKET_DEV` / `S3_BUCKET_PROD` | Static-site S3 bucket the build is synced to               |
+| `CLOUDFRONT_DISTRIBUTION_ID_DEV` / `CLOUDFRONT_DISTRIBUTION_ID_PROD` | CloudFront distribution to invalidate |
+
+> The frontend workflow assumes the role
+> `arn:aws:iam::<AWS_ACCOUNT_ID>:role/garden-club-github-<env>` and derives
+> `NEXT_PUBLIC_IMAGES_BASE_URL` from the bucket name + region. `NEXT_PUBLIC_*`
+> variables are baked into the client bundle at build time and cannot be changed
+> at runtime — the build must be re-run to change them.
 
 ## Environment Variables
 
-See `.env.local.example` for all required environment variables. For local development, copy this file to `.env.local` after running `npm run local:up`.
+For local development, `frontend/.env.local` is generated for you by
+`npm run local:up` (LocalStack) or `npm run dev:remote` (deployed dev stack) — you
+should not need to write it by hand. The `NEXT_PUBLIC_*` names must match
+`frontend/src/lib/constants.ts`:
 
-> **Important:** All `NEXT_PUBLIC_*` variables are baked into the client bundle at `next build` time. In CI/CD they are passed as Docker build arguments — they cannot be changed at container runtime. Store them as GitHub Actions secrets scoped to each environment (`dev` / `prod`).
+- `NEXT_PUBLIC_API_BASE_URL` — backend API base URL
+- `NEXT_PUBLIC_IMAGES_BASE_URL` — public S3 base URL for image display
+- `NEXT_PUBLIC_AWS_REGION`
+- `NEXT_PUBLIC_COGNITO_USER_POOL_ID`
+- `NEXT_PUBLIC_COGNITO_CLIENT_ID`
+
+Backend Lambda environment variables for local runs live in `backend/env.json`
+(see `backend/.env.example` for reference). Never commit `.env.local` or
+credentials — `.env.local` is in `.gitignore`.
 
 ## Development Workflow
 
 1. **Frontend Changes**: Edit files in `frontend/src/` — Next.js dev server auto-reloads
-2. **Backend Changes**: Edit files in `backend/functions/` — restart `sam local start-api`
+2. **Backend Changes**: Edit files in `backend/functions/` — restart `npm run local:api`
 3. **Infrastructure Changes**: Edit `backend/template.yaml` and redeploy with `sam deploy`
 
 ## Troubleshooting
@@ -160,7 +289,7 @@ See `.env.local.example` for all required environment variables. For local devel
 ### LocalStack Connection Issues
 - Ensure Docker is running: `docker ps`
 - Check LocalStack logs: `docker logs garden-club-localstack`
-- Verify network: `docker network ls` should show `localstack_default`
+- Verify network: `docker network ls` should show `garden-club_localstack_default`
 
 ### Lambda Execution Issues
 - Check SAM local logs for handler errors
@@ -171,198 +300,7 @@ See `.env.local.example` for all required environment variables. For local devel
 - Clear browser cookies and localStorage
 - Check `.env.local` has correct Cognito IDs
 - Verify Amplify configuration in `src/lib/amplify.ts`
-
----
-
-## Deployment to ECS Express Mode
-
-### One-Time AWS Setup
-
-#### 1. Create the ECR Repository
-
-```bash
-aws ecr create-repository \
-  --repository-name garden-club-frontend \
-  --region us-east-1
-```
-
-#### 2. Create the ECS Cluster (if not already created)
-
-```bash
-# dev cluster
-aws ecs create-cluster --cluster-name garden-club-dev
-# prod cluster
-aws ecs create-cluster --cluster-name garden-club-prod
-```
-
-#### 3. Create the ECS Express Mode Service (first deploy)
-
-Do this once in the AWS Console or via CLI after you have pushed an initial image:
-
-1. Open **ECS → Clusters → garden-club-dev** → **Create service**.
-2. Choose **Express** launch type (Fargate).
-3. Set the image to `<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/garden-club-frontend:dev-latest`.
-4. Set container port to **3000**.
-5. Choose CPU/memory (e.g. 0.5 vCPU / 1 GB for dev).
-6. Attach a VPC, subnets, and security group (allow inbound 3000 or 80/443 via ALB).
-7. Attach an Application Load Balancer forwarding to port 3000 (optional but recommended for HTTPS).
-8. Under **Task role / execution role**, attach:
-   - **Task execution role:** `ecsTaskExecutionRole` (pulls ECR image, writes CloudWatch logs)
-   - **Infrastructure role:** `ecsInfrastructureRoleForExpressServices`
-9. Name the service `garden-club-frontend-dev`.
-10. Repeat for `garden-club-prod` on the prod cluster.
-
-#### 4. Register the GitHub OIDC Identity Provider
-
-In **IAM → Identity providers**, add:
-
-- **Provider URL:** `https://token.actions.githubusercontent.com`
-- **Audience:** `sts.amazonaws.com`
-
-#### 5. Create the GitHub Actions IAM Role
-
-Create a role named **`github-actions-ecs-role`** with the following trust policy:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::<AWS_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-        },
-        "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:djdelgado/garden-club:ref:refs/heads/*"
-        }
-      }
-    }
-  ]
-}
-```
-
-Attach an inline permissions policy:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "ecr:GetAuthorizationToken",
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage",
-        "ecr:InitiateLayerUpload",
-        "ecr:UploadLayerPart",
-        "ecr:CompleteLayerUpload",
-        "ecr:PutImage"
-      ],
-      "Resource": "arn:aws:ecr:us-east-1:<AWS_ACCOUNT_ID>:repository/garden-club-frontend"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ecs:DescribeServices",
-        "ecs:UpdateService",
-        "ecs:RegisterTaskDefinition",
-        "ecs:DescribeTaskDefinition",
-        "ecs:DescribeTasks",
-        "ecs:ListTasks"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "iam:PassRole",
-      "Resource": [
-        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/ecsTaskExecutionRole",
-        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/ecsInfrastructureRoleForExpressServices"
-      ]
-    }
-  ]
-}
-```
-
-#### 6. Create the ECS Task Execution Role
-
-Create a role named **`ecsTaskExecutionRole`**:
-- **Trust:** `ecs-tasks.amazonaws.com`
-- **Policy:** AWS managed `AmazonECSTaskExecutionRolePolicy`
-
-#### 7. Create the ECS Infrastructure Role
-
-Create a role named **`ecsInfrastructureRoleForExpressServices`**:
-- **Trust:** `ecs.amazonaws.com`
-- **Policy:** AWS managed `AmazonECSInfrastructureRolePolicyForVolumes` (check current AWS docs for the exact managed policy name for ECS Express Mode)
-
-#### 8. Configure GitHub Actions Variables and Secrets
-
-In your GitHub repository → **Settings → Secrets and variables → Actions**:
-
-| Name | Type | Scope | Value |
-|------|------|-------|-------|
-| `AWS_ACCOUNT_ID` | Variable | Repository | Your 12-digit AWS account ID |
-| `AWS_REGION` | Variable | Repository | `us-east-1` |
-| `NEXT_PUBLIC_API_URL` | Secret | `dev` environment | Dev API Gateway URL |
-| `NEXT_PUBLIC_IMAGES_URL` | Secret | `dev` environment | Dev S3 images URL |
-| `NEXT_PUBLIC_GOCNITO_USER_POOL_ID` | Secret | `dev` environment | Dev Cognito Pool ID |
-| `NEXT_PUBLIC_GOCNITO_CLIENT_ID` | Secret | `dev` environment | Dev Cognito App Client ID |
-| `NEXT_PUBLIC_API_URL` | Secret | `prod` environment | Prod API Gateway URL |
-| `NEXT_PUBLIC_IMAGES_URL` | Secret | `prod` environment | Prod S3 images URL |
-| `NEXT_PUBLIC_GOCNITO_USER_POOL_ID` | Secret | `prod` environment | Prod Cognito Pool ID |
-| `NEXT_PUBLIC_GOCNITO_CLIENT_ID` | Secret | `prod` environment | Prod Cognito App Client ID |
-
-> Create two GitHub **Environments** (`dev` and `prod`) under **Settings → Environments** so secrets can be scoped per environment.
-
-#### 9. Update Backend CORS (samconfig.toml)
-
-Once your ECS service is behind a load balancer, update `backend/samconfig.toml`:
-
-```toml
-[dev.deploy.parameters]
-parameter_overrides = "Stage=\"dev\" CorsOrigin=\"https://dev.yourdomain.com/\" ..."
-```
-
-Replace the old `amplifyapp.com` URL with your new ECS ALB or custom domain.
-
----
-
-### Ongoing Deploy Flow
-
-Every push to `develop` or `main` (touching `frontend/**`, `Dockerfile`, `package.json`, or `package-lock.json`) triggers the GitHub Actions workflow:
-
-1. **resolve-env** — determines dev or prod based on branch.
-2. **build-and-push** — builds the Docker image with env-specific `NEXT_PUBLIC_*` values baked in, pushes to ECR with a short SHA tag and a `dev-latest` / `prod-latest` floating tag.
-3. **deploy** — registers a new ECS task definition revision with the new image URI and updates the service; waits for stability.
-
-Track progress in the **Actions** tab of the repository.
-
-### Rolling Back
-
-To roll back to a previous image, update the ECS service manually:
-
-```bash
-# Find the previous image tag in ECR or the Actions run history, then:
-aws ecs update-service \
-  --cluster garden-club-prod \
-  --service garden-club-frontend-prod \
-  --task-definition garden-club-frontend-prod:<PREVIOUS_REVISION>
-```
-
-Or simply re-run the GitHub Actions workflow for a previous commit using **workflow_dispatch**.
-
----
+- Remember auth cannot be exercised against LocalStack — use `npm run dev:remote`
 
 ## License
 
