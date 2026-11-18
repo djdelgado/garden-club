@@ -42,9 +42,14 @@ cd backend && sam deploy --guided          # Deploy to AWS
 ```
 
 ### Running Tests
-Currently no test framework is set up. Tests would be added to:
-- Frontend: `frontend/` directory (recommended: Jest + React Testing Library)
-- Backend: `backend/` directory (recommended: pytest)
+```bash
+npm test                # Both suites (frontend, then backend)
+npm run test:frontend   # Jest + React Testing Library (frontend/)
+npm run test:backend    # pytest (backend/); no AWS credentials needed
+```
+- **Frontend**: Jest via `next/jest` (SWC, same transforms as the app) + React Testing Library, jsdom environment. Config: `frontend/jest.config.mjs`, setup: `frontend/jest.setup.ts`. Tests live in `__tests__/` folders next to the code (`src/**/__tests__/*.test.ts(x)`); the leading underscore keeps them out of App Router routing. Mock `aws-amplify/auth` in any test that imports `lib/api`.
+- **Backend**: pytest; install `pip install -r backend/requirements.txt -r backend/requirements-dev.txt`. boto3 is mocked, so tests never touch AWS. `backend/pytest.ini` puts `layers/common/python` on the path to mirror the CommonLayer.
+- CI (`.github/workflows/ci.yml`) runs both suites on every PR into `develop`/`main`.
 
 ## Architecture
 
@@ -221,7 +226,7 @@ Manual deploy:
 
 ## Testing Strategy Recommendations
 
-- **Frontend**: Jest + React Testing Library for component testing; E2E with Playwright/Cypress
+- **Frontend**: Jest + React Testing Library (set up; see Running Tests); E2E with Playwright/Cypress not yet added
 - **Backend**: pytest for unit/integration tests with mocked AWS services
 - **Integration**: E2E tests spanning frontend + local Lambda + LocalStack
 
