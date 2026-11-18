@@ -1,22 +1,18 @@
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict
 from urllib.parse import parse_qs, quote
 
 import boto3
 from aws_lambda_powertools import Logger
 
+from gardenclub_common import aws_kwargs, format_response, is_admin, query_all, scan_all
 from db_types import ImageItem, FolderMetadata
 
 logger = Logger()
 
-# Use LocalStack endpoint in local dev, AWS managed credentials in production
-aws_kwargs = {"region_name": os.environ.get("AWS_REGION", "us-east-1")}
-if localstack_endpoint := os.environ.get("LOCALSTACK_ENDPOINT"):
-    aws_kwargs["endpoint_url"] = localstack_endpoint
-
-dynamodb = boto3.resource("dynamodb", **aws_kwargs)
-s3_client = boto3.client("s3", **aws_kwargs)
+dynamodb = boto3.resource("dynamodb", **aws_kwargs())
+s3_client = boto3.client("s3", **aws_kwargs())
 
 images_table = dynamodb.Table(os.environ.get("IMAGES_TABLE_NAME", "GardenClubImages"))
 folders_table = dynamodb.Table(os.environ.get("FOLDERS_TABLE_NAME", "GardenClubFolders"))
@@ -43,35 +39,6 @@ def build_image_url(s3_key: str) -> str:
         )
     # quote each path segment but keep the slashes between them.
     return f"https://{images_cdn_domain}/{quote(s3_key, safe='/')}"
-
-
-def query_all(table, **kwargs) -> list:
-    """Run a DynamoDB query, following LastEvaluatedKey until the full result
-    set is read. DynamoDB caps each page at 1 MB, so a single query() silently
-    truncates once a folder exceeds that. Local helper for now; a natural home
-    is the shared backend module tracked in #52.
-    """
-    items: list = []
-    while True:
-        response = table.query(**kwargs)
-        items.extend(response.get("Items", []))
-        last_key = response.get("LastEvaluatedKey")
-        if not last_key:
-            return items
-        kwargs["ExclusiveStartKey"] = last_key
-
-
-def scan_all(table, **kwargs) -> list:
-    """Run a DynamoDB scan, following LastEvaluatedKey until the full result
-    set is read (same 1 MB per-page cap as query_all)."""
-    items: list = []
-    while True:
-        response = table.scan(**kwargs)
-        items.extend(response.get("Items", []))
-        last_key = response.get("LastEvaluatedKey")
-        if not last_key:
-            return items
-        kwargs["ExclusiveStartKey"] = last_key
 
 
 def adjust_folder_count(folder_name: str, delta: int) -> None:
@@ -101,62 +68,6 @@ def set_folder_thumbnail(folder_name: str, thumbnail_key: str) -> None:
         )
     except folders_table.meta.client.exceptions.ConditionalCheckFailedException:
         pass
-
-
-def format_response(status_code: int, body: Any) -> Dict[str, Any]:
-    return {
-        "statusCode": status_code,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-        },
-        "body": json.dumps(body, default=str),
-    }
-
-
-def get_claims(event: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract JWT claims (HTTP API v2 path: requestContext.authorizer.jwt.claims).
-
-    Local escape hatch: when running against LocalStack (which has no Cognito and
-    where sam local doesn't emulate the JWT authorizer) fall back to LOCAL_DEV_CLAIMS.
-    Double-gated on LOCALSTACK_ENDPOINT so a Lambda in AWS — which never has it — can
-    never take this branch. This is an env-gated auth bypass; it logs loudly.
-    """
-    claims = (
-        event.get("requestContext", {})
-        .get("authorizer", {})
-        .get("jwt", {})
-        .get("claims", {})
-    ) or {}
-
-    if not claims and os.environ.get("LOCALSTACK_ENDPOINT") and os.environ.get("LOCAL_DEV_CLAIMS"):
-        logger.warning(
-            "⚠️ LOCAL_DEV_CLAIMS auth bypass ACTIVE — trusting env-provided claims. "
-            "This must only ever happen in local dev against LocalStack."
-        )
-        try:
-            claims = json.loads(os.environ["LOCAL_DEV_CLAIMS"])
-        except json.JSONDecodeError:
-            logger.exception("Failed to parse LOCAL_DEV_CLAIMS")
-
-    return claims
-
-
-def parse_groups(claims: Dict[str, Any]) -> List[str]:
-    """Parse cognito:groups. HTTP API emits a bracketed string: "[Admins]" or
-    "[Admins, Editors]" — a naive split on "," would never match."""
-    groups = claims.get("cognito:groups", "")
-    if isinstance(groups, list):
-        return [str(g).strip() for g in groups]
-    text = str(groups).strip()
-    if text.startswith("[") and text.endswith("]"):
-        text = text[1:-1]
-    return [g.strip() for g in text.split(",") if g.strip()]
-
-
-def is_admin(event: Dict[str, Any]) -> bool:
-    """Check whether the caller belongs to the Cognito Admins group."""
-    return "Admins" in parse_groups(get_claims(event))
 
 
 def get_query_params(event: Dict[str, Any]) -> Dict[str, str]:

@@ -8,16 +8,12 @@ from aws_lambda_powertools import Logger
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, ValidationError
 
+from gardenclub_common import aws_kwargs, format_response, get_claims, get_user_id, is_admin
 from db_types import EventItem, MemberItem
 
 logger = Logger()
 
-# Use LocalStack endpoint in local dev, AWS managed credentials in production
-dynamodb_kwargs = {"region_name": os.environ.get("AWS_REGION", "us-east-1")}
-if localstack_endpoint := os.environ.get("LOCALSTACK_ENDPOINT"):
-    dynamodb_kwargs["endpoint_url"] = localstack_endpoint
-
-dynamodb = boto3.resource("dynamodb", **dynamodb_kwargs)
+dynamodb = boto3.resource("dynamodb", **aws_kwargs())
 events_table = dynamodb.Table(os.environ.get("EVENTS_TABLE_NAME", "GardenClubEvents"))
 members_table = dynamodb.Table(os.environ.get("MEMBERS_TABLE_NAME", "GardenClubMembers"))
 
@@ -31,68 +27,6 @@ class Event(BaseModel):
     headerImageKey: Optional[str] = None
     createdAt: Optional[str] = None
     createdBy: Optional[str] = None
-
-
-def format_response(status_code: int, body: Any) -> Dict[str, Any]:
-    return {
-        "statusCode": status_code,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body, default=str),
-    }
-
-
-def get_user_id(event: Dict[str, Any]) -> str:
-    """Extract the caller's `sub` from the JWT claims.
-
-    Delegates to get_claims so the single HTTP API v2 claims path (and the local
-    dev fallback) lives in one place rather than being re-derived here.
-    """
-    return str(get_claims(event).get("sub") or "unknown")
-
-
-def get_claims(event: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract JWT claims (HTTP API v2 path: requestContext.authorizer.jwt.claims).
-
-    Mirrors the members handler, including the LocalStack escape hatch: sam local
-    doesn't emulate the JWT authorizer, so fall back to LOCAL_DEV_CLAIMS when
-    running against LocalStack. Double-gated on LOCALSTACK_ENDPOINT so a Lambda in
-    AWS can never take this branch.
-    """
-    claims = (
-        event.get("requestContext", {})
-        .get("authorizer", {})
-        .get("jwt", {})
-        .get("claims", {})
-    ) or {}
-
-    if not claims and os.environ.get("LOCALSTACK_ENDPOINT") and os.environ.get("LOCAL_DEV_CLAIMS"):
-        logger.warning(
-            "⚠️ LOCAL_DEV_CLAIMS auth bypass ACTIVE — trusting env-provided claims. "
-            "This must only ever happen in local dev against LocalStack."
-        )
-        try:
-            claims = json.loads(os.environ["LOCAL_DEV_CLAIMS"])
-        except json.JSONDecodeError:
-            logger.exception("Failed to parse LOCAL_DEV_CLAIMS")
-
-    return claims
-
-
-def parse_groups(claims: Dict[str, Any]) -> List[str]:
-    """Parse cognito:groups. HTTP API emits a bracketed string: "[Admins]" or
-    "[Admins, Editors]" — a naive split on "," would never match."""
-    groups = claims.get("cognito:groups", "")
-    if isinstance(groups, list):
-        return [str(g).strip() for g in groups]
-    text = str(groups).strip()
-    if text.startswith("[") and text.endswith("]"):
-        text = text[1:-1]
-    return [g.strip() for g in text.split(",") if g.strip()]
-
-
-def is_admin(event: Dict[str, Any]) -> bool:
-    """Check whether the caller belongs to the Cognito Admins group."""
-    return "Admins" in parse_groups(get_claims(event))
 
 
 def find_member_by_sub(sub: str) -> Optional[MemberItem]:

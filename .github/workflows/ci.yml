@@ -72,6 +72,10 @@ jobs:
         working-directory: frontend
         run: npx tsc --noEmit
 
+      - name: Unit tests
+        working-directory: frontend
+        run: npm test -- --ci
+
       - name: Build static export
         working-directory: frontend
         env:
