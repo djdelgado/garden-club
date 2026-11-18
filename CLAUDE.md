@@ -94,6 +94,7 @@ Currently no test framework is set up. Tests would be added to:
   - `images/` — Image + folder CRUD (`GET /images`, `GET/PUT/DELETE /images/folders`, `DELETE /images/{imageId}`)
   - `upload/` — Presigned URL flow (`POST /upload/presign`, `POST /upload/complete`)
   - `members/` — Member management (`GET /members`, `GET/PUT /members/me`; admin-only `POST /members`, `PUT/DELETE /members/{memberId}`)
+  - `directory/` — Club directory/roster, independent of app accounts (`GET /directory` for any member; admin-only `POST /directory`, `PUT/DELETE /directory/{entryId}`, `POST /directory/import` for spreadsheet rows). Entries link to app members by email at read time
 - `env.json` — Local environment variables for Lambda execution
 - `scripts/seed.py` — DynamoDB seed script for local development data
 - `Dockerfile.lambda` — Custom Docker image for Lambda testing (if needed)
@@ -109,6 +110,7 @@ Currently no test framework is set up. Tests would be added to:
 **DynamoDB Tables**:
 - `GardenClubEvents` — eventId (PK); GSI: `StartTimeIndex` on `startTime`
 - `GardenClubImages` — imageId (PK); GSI: `FolderNameIndex` on `folderName`
+- `GardenClubDirectory` — entryId (PK); sparse GSI: `EmailIndex` on `emailLower`. The club roster, maintained by admins (manual entry or .xlsx/.csv import); separate from `GardenClubMembers`, which holds only app accounts
 
 **S3 Bucket**:
 - `garden-club-images-{accountId}-{stage}` — Stores images organized by `folderName` prefix
