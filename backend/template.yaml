@@ -32,6 +32,7 @@ Globals:
         IMAGES_TABLE_NAME: !Ref ImagesTable
         FOLDERS_TABLE_NAME: !Ref FoldersTable
         MEMBERS_TABLE_NAME: !Ref MembersTable
+        DIRECTORY_TABLE_NAME: !Ref DirectoryTable
         IMAGES_BUCKET_NAME: !Ref ImagesBucket
         # CloudFront domain fronting the images bucket. Image handlers build
         # stable, cacheable URLs as https://<IMAGES_CDN_DOMAIN>/<s3Key>. Unused
@@ -181,6 +182,30 @@ Resources:
           Projection:
             ProjectionType: ALL
         # Case-insensitive duplicate-email checks (replaces a scan filter).
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: emailLower
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  # Club roster, maintained by admins. Independent of app accounts; linked to
+  # GardenClubMembers by email at read time.
+  DirectoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'GardenClubDirectory-${Stage}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: entryId
+          AttributeType: S
+        - AttributeName: emailLower
+          AttributeType: S
+      KeySchema:
+        - AttributeName: entryId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        # Sparse: entries without an email omit emailLower.
         - IndexName: EmailIndex
           KeySchema:
             - AttributeName: emailLower
@@ -409,6 +434,45 @@ Resources:
                     s3:prefix:
                       - 'members/*'
 
+  DirectoryLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DirectoryAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !GetAtt DirectoryTable.Arn
+                  - !Sub '${DirectoryTable.Arn}/index/*'
+              # Read-only: entries are linked to app members by email.
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                Resource: !GetAtt MembersTable.Arn
+              # Presigned GETs for linked members' avatars.
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub '${ImagesBucket.Arn}/members/*'
+
   ImagesLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -587,6 +651,45 @@ Resources:
             ApiId: !Ref GardenClubApi
             Path: /members/{memberId}/resend-invite
             Method: POST
+
+  DirectoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'GardenClubDirectoryFunction-${Stage}'
+      CodeUri: functions/directory/
+      Handler: handler.lambda_handler
+      Role: !GetAtt DirectoryLambdaRole.Arn
+      Events:
+        ListDirectory:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /directory
+            Method: GET
+        CreateDirectoryEntry:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /directory
+            Method: POST
+        ImportDirectory:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /directory/import
+            Method: POST
+        UpdateDirectoryEntry:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /directory/{entryId}
+            Method: PUT
+        DeleteDirectoryEntry:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GardenClubApi
+            Path: /directory/{entryId}
+            Method: DELETE
 
   ImagesFunction:
     Type: AWS::Serverless::Function

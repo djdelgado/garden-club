@@ -88,6 +88,20 @@ awslocal dynamodb create-table \
 
 echo -e "${GREEN}✓ Members table created${NC}"
 
+awslocal dynamodb create-table \
+  --table-name GardenClubDirectory \
+  --attribute-definitions \
+    AttributeName=entryId,AttributeType=S \
+    AttributeName=emailLower,AttributeType=S \
+  --key-schema \
+    AttributeName=entryId,KeyType=HASH \
+  --global-secondary-indexes \
+    "IndexName=EmailIndex,KeySchema=[{AttributeName=emailLower,KeyType=HASH}],Projection={ProjectionType=ALL}" \
+  --billing-mode PAY_PER_REQUEST \
+  2>/dev/null || echo "Directory table already exists"
+
+echo -e "${GREEN}✓ Directory table created${NC}"
+
 echo -e "${BLUE}Creating S3 bucket...${NC}"
 
 awslocal s3 mb s3://garden-club-images 2>/dev/null || echo "Bucket already exists"

@@ -84,7 +84,7 @@ def load_handler(name: str):
 @pytest.fixture(scope="session")
 def handlers(aws_env):
     """Every Lambda handler module, keyed by function directory name."""
-    return {name: load_handler(name) for name in ("events", "images", "upload", "members")}
+    return {name: load_handler(name) for name in ("events", "images", "upload", "members", "directory")}
 
 
 @pytest.fixture(autouse=True)
