@@ -16,6 +16,9 @@ export interface Member {
   createdAt: string;
   updatedAt: string;
   lastInviteSentAt?: string;
+  // Only on a POST /members response: true when the email already had a Cognito
+  // login (e.g. the bootstrap admin) and it was linked instead of invited.
+  linkedExistingAccount?: boolean;
 }
 
 // POST /members accepts only name + email; the backend provisions Cognito.

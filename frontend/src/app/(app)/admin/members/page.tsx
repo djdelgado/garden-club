@@ -67,7 +67,13 @@ export default function MembersAdminPage() {
 
   const handleSaved = (saved: Member) => {
     upsertMember(saved);
-    setToast(editing ? "Member updated" : "Invite sent");
+    setToast(
+      editing
+        ? "Member updated"
+        : saved.linkedExistingAccount
+          ? `Linked ${saved.email}'s existing login (no invite sent)`
+          : "Invite sent"
+    );
     setFormOpen(false);
     setEditing(null);
   };
