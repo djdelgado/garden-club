@@ -53,3 +53,6 @@ backend/env.json
 # Frontend build output (path-specific, in addition to root /.next/)
 frontend/.next/
 frontend/out/
+
+# Local Python virtualenvs (e.g. backend/.venv-test for pytest)
+.venv*/
