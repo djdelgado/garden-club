@@ -1,5 +1,11 @@
 import axios from "axios";
-import { Member, CreateMemberInput, UpdateMemberInput } from "@/types/member";
+import {
+  Member,
+  CreateMemberInput,
+  UpdateMemberInput,
+  UpdateMeInput,
+  MemberPhotoUpload,
+} from "@/types/member";
 import { apiGet, apiPost, apiPut, apiDelete } from "../lib/api";
 
 const MEMBER_PATH = "/members";
@@ -38,5 +44,22 @@ export const MemberService = {
 
   resendInvite: async (memberId: string) => {
     await apiPost(`${MEMBER_PATH}/${memberId}/resend-invite`, {});
+  },
+
+  // ── Self-service (`me`-scoped; the server resolves the caller from the token) ──
+
+  getMe: async () => {
+    return apiGet<Member>(`${MEMBER_PATH}/me`);
+  },
+
+  updateMe: async (input: UpdateMeInput) => {
+    return apiPut<Member>(`${MEMBER_PATH}/me`, input);
+  },
+
+  presignMyPhoto: async (fileName: string, contentType: string) => {
+    return apiPost<MemberPhotoUpload>(`${MEMBER_PATH}/me/photo`, {
+      fileName,
+      contentType,
+    });
   },
 };

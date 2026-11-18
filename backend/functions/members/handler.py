@@ -271,6 +271,13 @@ def update_me(event: Dict[str, Any], body: str) -> Dict[str, Any]:
         if data.address is not None:
             member["address"] = data.address
         if data.photoKey is not None and data.photoKey != member.get("photoKey"):
+            # Only accept keys POST /members/me/photo could have issued for this
+            # member. Otherwise a member could point photoKey at a gallery image
+            # (or another member's avatar) and the old-photo cleanup below would
+            # delete that object on their next photo change.
+            own_prefix = f"members/{member['memberId']}/"
+            if not data.photoKey.startswith(own_prefix) or ".." in data.photoKey:
+                return format_response(400, {"error": "Invalid photoKey"})
             old_key = member.get("photoKey")
             member["photoKey"] = data.photoKey
             if old_key:

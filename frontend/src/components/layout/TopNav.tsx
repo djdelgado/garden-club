@@ -14,6 +14,7 @@ import {
   ListItemIcon,
 } from "@mui/material";
 import LogoutIcon from "@mui/icons-material/Logout";
+import PersonIcon from "@mui/icons-material/PersonOutlined";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "aws-amplify/auth";
 import { useAuth } from "@/hooks/useAuth";
@@ -148,6 +149,18 @@ export function TopNav() {
               anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
               transformOrigin={{ vertical: "top", horizontal: "right" }}
             >
+              <MenuItem
+                onClick={() => {
+                  handleMenuClose();
+                  router.push("/profile");
+                }}
+                selected={pathname.startsWith("/profile")}
+              >
+                <ListItemIcon>
+                  <PersonIcon fontSize="small" />
+                </ListItemIcon>
+                My profile
+              </MenuItem>
               <MenuItem onClick={handleSignOut}>
                 <ListItemIcon>
                   <LogoutIcon fontSize="small" />
