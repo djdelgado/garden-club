@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List
 from urllib.parse import parse_qs, quote
 
 import boto3
@@ -112,6 +112,51 @@ def format_response(status_code: int, body: Any) -> Dict[str, Any]:
         },
         "body": json.dumps(body, default=str),
     }
+
+
+def get_claims(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract JWT claims (HTTP API v2 path: requestContext.authorizer.jwt.claims).
+
+    Local escape hatch: when running against LocalStack (which has no Cognito and
+    where sam local doesn't emulate the JWT authorizer) fall back to LOCAL_DEV_CLAIMS.
+    Double-gated on LOCALSTACK_ENDPOINT so a Lambda in AWS — which never has it — can
+    never take this branch. This is an env-gated auth bypass; it logs loudly.
+    """
+    claims = (
+        event.get("requestContext", {})
+        .get("authorizer", {})
+        .get("jwt", {})
+        .get("claims", {})
+    ) or {}
+
+    if not claims and os.environ.get("LOCALSTACK_ENDPOINT") and os.environ.get("LOCAL_DEV_CLAIMS"):
+        logger.warning(
+            "⚠️ LOCAL_DEV_CLAIMS auth bypass ACTIVE — trusting env-provided claims. "
+            "This must only ever happen in local dev against LocalStack."
+        )
+        try:
+            claims = json.loads(os.environ["LOCAL_DEV_CLAIMS"])
+        except json.JSONDecodeError:
+            logger.exception("Failed to parse LOCAL_DEV_CLAIMS")
+
+    return claims
+
+
+def parse_groups(claims: Dict[str, Any]) -> List[str]:
+    """Parse cognito:groups. HTTP API emits a bracketed string: "[Admins]" or
+    "[Admins, Editors]" — a naive split on "," would never match."""
+    groups = claims.get("cognito:groups", "")
+    if isinstance(groups, list):
+        return [str(g).strip() for g in groups]
+    text = str(groups).strip()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    return [g.strip() for g in text.split(",") if g.strip()]
+
+
+def is_admin(event: Dict[str, Any]) -> bool:
+    """Check whether the caller belongs to the Cognito Admins group."""
+    return "Admins" in parse_groups(get_claims(event))
 
 
 def get_query_params(event: Dict[str, Any]) -> Dict[str, str]:
@@ -318,6 +363,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     path = event.get("rawPath", "")
 
     try:
+        # Mutations (delete image, delete/rename folder) are Admins-only; the
+        # GET listings stay open to any authenticated member.
+        if method in ("DELETE", "PUT") and not is_admin(event):
+            logger.warning("Denied non-admin %s %s", method, path)
+            return format_response(403, {"error": "Admin access required"})
+
         if method == "GET":
             # Check if requesting folders list
             if path.endswith("/folders"):

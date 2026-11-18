@@ -42,21 +42,12 @@ def format_response(status_code: int, body: Any) -> Dict[str, Any]:
 
 
 def get_user_id(event: Dict[str, Any]) -> str:
-    """Extract user ID from JWT token context.
+    """Extract the caller's `sub` from the JWT claims.
 
-    HTTP API (v2) nests JWT claims under `authorizer.jwt.claims` — the missing
-    `.jwt` segment is why createdBy was recorded as "unknown".
+    Delegates to get_claims so the single HTTP API v2 claims path (and the local
+    dev fallback) lives in one place rather than being re-derived here.
     """
-    try:
-        return (
-            event.get("requestContext", {})
-            .get("authorizer", {})
-            .get("jwt", {})
-            .get("claims", {})
-            .get("sub", "unknown")
-        )
-    except Exception:
-        return "unknown"
+    return str(get_claims(event).get("sub") or "unknown")
 
 
 def get_claims(event: Dict[str, Any]) -> Dict[str, Any]:
@@ -85,6 +76,23 @@ def get_claims(event: Dict[str, Any]) -> Dict[str, Any]:
             logger.exception("Failed to parse LOCAL_DEV_CLAIMS")
 
     return claims
+
+
+def parse_groups(claims: Dict[str, Any]) -> List[str]:
+    """Parse cognito:groups. HTTP API emits a bracketed string: "[Admins]" or
+    "[Admins, Editors]" — a naive split on "," would never match."""
+    groups = claims.get("cognito:groups", "")
+    if isinstance(groups, list):
+        return [str(g).strip() for g in groups]
+    text = str(groups).strip()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    return [g.strip() for g in text.split(",") if g.strip()]
+
+
+def is_admin(event: Dict[str, Any]) -> bool:
+    """Check whether the caller belongs to the Cognito Admins group."""
+    return "Admins" in parse_groups(get_claims(event))
 
 
 def find_member_by_sub(sub: str) -> Optional[MemberItem]:
@@ -333,6 +341,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if method == "DELETE":
                 return remove_rsvp(event_id, event)
             return format_response(405, {"error": "Method not allowed"})
+
+        # Mutations are Admins-only. RSVP (handled above) stays open to any
+        # authenticated member, and GET falls through untouched.
+        if method in ("POST", "PUT", "DELETE") and not is_admin(event):
+            logger.warning("Denied non-admin %s %s", method, path)
+            return format_response(403, {"error": "Admin access required"})
 
         if method == "GET":
             if "/{id}" in path or path.endswith("/") == False and path.split("/")[-1] != "events":

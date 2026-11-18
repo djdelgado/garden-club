@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List
 from uuid import uuid4
 
 import boto3
@@ -44,22 +44,58 @@ def format_response(status_code: int, body: Any) -> Dict[str, Any]:
     }
 
 
-def get_user_id(event: Dict[str, Any]) -> str:
-    """Extract user ID from JWT token context.
+def get_claims(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract JWT claims (HTTP API v2 path: requestContext.authorizer.jwt.claims).
 
-    HTTP API (v2) nests JWT claims under `authorizer.jwt.claims` — the missing
-    `.jwt` segment is why uploadedBy was recorded as "unknown".
+    Local escape hatch: when running against LocalStack (which has no Cognito and
+    where sam local doesn't emulate the JWT authorizer) fall back to LOCAL_DEV_CLAIMS.
+    Double-gated on LOCALSTACK_ENDPOINT so a Lambda in AWS — which never has it — can
+    never take this branch. This is an env-gated auth bypass; it logs loudly.
     """
-    try:
-        return (
-            event.get("requestContext", {})
-            .get("authorizer", {})
-            .get("jwt", {})
-            .get("claims", {})
-            .get("sub", "unknown")
+    claims = (
+        event.get("requestContext", {})
+        .get("authorizer", {})
+        .get("jwt", {})
+        .get("claims", {})
+    ) or {}
+
+    if not claims and os.environ.get("LOCALSTACK_ENDPOINT") and os.environ.get("LOCAL_DEV_CLAIMS"):
+        logger.warning(
+            "⚠️ LOCAL_DEV_CLAIMS auth bypass ACTIVE — trusting env-provided claims. "
+            "This must only ever happen in local dev against LocalStack."
         )
-    except Exception:
-        return "unknown"
+        try:
+            claims = json.loads(os.environ["LOCAL_DEV_CLAIMS"])
+        except json.JSONDecodeError:
+            logger.exception("Failed to parse LOCAL_DEV_CLAIMS")
+
+    return claims
+
+
+def parse_groups(claims: Dict[str, Any]) -> List[str]:
+    """Parse cognito:groups. HTTP API emits a bracketed string: "[Admins]" or
+    "[Admins, Editors]" — a naive split on "," would never match."""
+    groups = claims.get("cognito:groups", "")
+    if isinstance(groups, list):
+        return [str(g).strip() for g in groups]
+    text = str(groups).strip()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    return [g.strip() for g in text.split(",") if g.strip()]
+
+
+def is_admin(event: Dict[str, Any]) -> bool:
+    """Check whether the caller belongs to the Cognito Admins group."""
+    return "Admins" in parse_groups(get_claims(event))
+
+
+def get_user_id(event: Dict[str, Any]) -> str:
+    """Extract the caller's `sub` from the JWT claims.
+
+    Delegates to get_claims so the single HTTP API v2 claims path (and the local
+    dev fallback) lives in one place rather than being re-derived here.
+    """
+    return str(get_claims(event).get("sub") or "unknown")
 
 
 def generate_presigned_url(bucket: str, key: str, content_type: str,expiration: int = 3600) -> str:
@@ -142,6 +178,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     method = event.get("requestContext", {}).get("http", {}).get("method", "")
     path = event.get("rawPath", "")
+
+    # Both upload routes (presign + complete) write to the shared gallery, so
+    # both are Admins-only. Member self-service photos go through
+    # POST /members/me/photo in the members handler instead.
+    if not is_admin(event):
+        logger.warning("Denied non-admin %s %s", method, path)
+        return format_response(403, {"error": "Admin access required"})
 
     if method == "POST" and path.endswith("/upload/complete"):
         try:
