@@ -324,6 +324,59 @@ def presign_photo(event: Dict[str, Any], body: str) -> Dict[str, Any]:
         return format_response(500, {"error": str(err)})
 
 
+def cognito_sub_of(user: Dict[str, Any]) -> str:
+    """The `sub` from an AdminCreateUser `User` or an AdminGetUser response."""
+    attrs = user.get("Attributes") or user.get("UserAttributes") or []
+    return next((a["Value"] for a in attrs if a["Name"] == "sub"), "")
+
+
+def provision_or_link_cognito_user(email: str) -> Dict[str, Any]:
+    """Create (and invite) a Cognito user for `email`, or link the one that exists.
+
+    Linking covers the bootstrap admin (scripts/bootstrap-admin.sh creates a
+    Cognito user but no Members row) and anyone else provisioned out-of-band:
+    instead of a 409 on UsernameExistsException, adopt that account. No invite
+    email is sent for a linked user; status/role mirror what Cognito says.
+
+    Returns {username, sub, status, role, linked}. Raises ClientError for any
+    Cognito failure other than "already exists".
+    """
+    if not user_pool_id:
+        # Local no-Cognito path (LocalStack Community has no Cognito). Synthesize a sub
+        # and still write the row so the directory works locally.
+        logger.warning("USER_POOL_ID unset — skipping Cognito provisioning (local no-Cognito path)")
+        return {"username": email, "sub": f"local-{uuid.uuid4()}", "status": "INVITED",
+                "role": "MEMBER", "linked": False}
+
+    try:
+        response = cognito.admin_create_user(
+            UserPoolId=user_pool_id,
+            Username=email,
+            UserAttributes=[
+                {"Name": "email", "Value": email},
+                {"Name": "email_verified", "Value": "true"},
+            ],
+            DesiredDeliveryMediums=["EMAIL"],
+        )
+        user = response.get("User", {})
+        return {"username": user.get("Username", email), "sub": cognito_sub_of(user),
+                "status": "INVITED", "role": "MEMBER", "linked": False}
+    except ClientError as err:
+        if err.response.get("Error", {}).get("Code", "") != "UsernameExistsException":
+            raise
+
+    existing = cognito.admin_get_user(UserPoolId=user_pool_id, Username=email)
+    username = existing.get("Username", email)
+    groups = cognito.admin_list_groups_for_user(UserPoolId=user_pool_id, Username=username)
+    is_admin_user = any(g.get("GroupName") == "Admins" for g in groups.get("Groups", []))
+    # FORCE_CHANGE_PASSWORD = never signed in (e.g. freshly bootstrapped); sync_me
+    # flips INVITED -> ACTIVE on their first authenticated request.
+    status = "INVITED" if existing.get("UserStatus") == "FORCE_CHANGE_PASSWORD" else "ACTIVE"
+    logger.info("Linking existing Cognito user %s to a new member row", username)
+    return {"username": username, "sub": cognito_sub_of(existing), "status": status,
+            "role": "ADMIN" if is_admin_user else "MEMBER", "linked": True}
+
+
 def create_member(body: str) -> Dict[str, Any]:
     """POST /members — Admins only. AdminCreateUser (invite email) + table row."""
     try:
@@ -338,67 +391,44 @@ def create_member(body: str) -> Dict[str, Any]:
         return format_response(409, {"error": "A member with this email already exists"})
 
     # Provision the Cognito account first; DynamoDB owns display info, Cognito owns credentials.
-    if user_pool_id:
-        try:
-            response = cognito.admin_create_user(
-                UserPoolId=user_pool_id,
-                Username=email,
-                UserAttributes=[
-                    {"Name": "email", "Value": email},
-                    {"Name": "email_verified", "Value": "true"},
-                ],
-                DesiredDeliveryMediums=["EMAIL"],
-            )
-        except ClientError as err:
-            code = err.response.get("Error", {}).get("Code", "")
-            if code == "UsernameExistsException":
-                return format_response(409, {"error": "A Cognito user with this email already exists"})
-            logger.exception("Error creating Cognito user")
-            return format_response(500, {"error": str(err)})
-
-        cognito_user = response.get("User", {})
-        cognito_username = cognito_user.get("Username", email)
-        cognito_sub = next(
-            (a["Value"] for a in cognito_user.get("Attributes", []) if a["Name"] == "sub"),
-            "",
-        )
-    else:
-        # Local no-Cognito path (LocalStack Community has no Cognito). Synthesize a sub
-        # and still write the row so the directory works locally.
-        logger.warning("USER_POOL_ID unset — skipping Cognito provisioning (local no-Cognito path)")
-        cognito_username = email
-        cognito_sub = f"local-{uuid.uuid4()}"
+    try:
+        account = provision_or_link_cognito_user(email)
+    except ClientError as err:
+        logger.exception("Error provisioning Cognito user")
+        return format_response(500, {"error": str(err)})
 
     now = now_iso()
     item: MemberItem = {
         "memberId": str(uuid.uuid4()),
-        "cognitoSub": cognito_sub,
-        "cognitoUsername": cognito_username,
+        "cognitoSub": account["sub"],
+        "cognitoUsername": account["username"],
         "email": email,
         "emailLower": email.lower(),
         "name": data.name,
         "phone": "",
         "address": "",
-        "status": "INVITED",
-        "role": "MEMBER",
+        "status": account["status"],
+        "role": account["role"],
         "createdAt": now,
         "updatedAt": now,
-        "lastInviteSentAt": now,
     }
+    if not account["linked"]:
+        item["lastInviteSentAt"] = now
 
     try:
         members_table.put_item(Item=item)
     except Exception as err:
         # Table write failed after the Cognito user was created — best-effort rollback.
         logger.exception("Error writing member row; rolling back Cognito user")
-        if user_pool_id:
+        # Never delete a pre-existing Cognito user we merely linked to.
+        if user_pool_id and not account["linked"]:
             try:
-                cognito.admin_delete_user(UserPoolId=user_pool_id, Username=cognito_username)
+                cognito.admin_delete_user(UserPoolId=user_pool_id, Username=account["username"])
             except ClientError:
                 logger.exception("Failed to roll back Cognito user for %s", email)
         return format_response(500, {"error": str(err)})
 
-    return format_response(201, item)
+    return format_response(201, {**item, "linkedExistingAccount": account["linked"]})
 
 
 def update_member(member_id: str, body: str) -> Dict[str, Any]:
