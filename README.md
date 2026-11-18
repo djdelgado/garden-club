@@ -138,6 +138,21 @@ Deployments run automatically via GitHub Actions. Branch maps to environment:
 
 Both workflows authenticate to AWS with **GitHub OIDC** (no long-lived AWS keys).
 
+### PR checks (`.github/workflows/ci.yml`)
+
+Every pull request into `develop` or `main` (including agent-opened drafts) runs
+a CI gate before merge. It needs no AWS credentials:
+
+- **frontend**: `npm ci`, `npm run lint`, `npx tsc --noEmit`, `npm run build`
+  (with dummy `NEXT_PUBLIC_*` values)
+- **backend**: `sam validate --lint`, `python -m compileall backend/functions`,
+  and `pytest` when `backend/tests/` exists
+
+Each job only runs when its side of the repo changed; a skipped job reports
+success, so both can be **required checks** in branch protection for `develop`
+and `main` without blocking docs-only PRs. Run it by hand from the Actions tab
+(`workflow_dispatch`) to check both sides regardless of what changed.
+
 ### Backend (`.github/workflows/deploy-backend.yml`)
 
 On a push to `develop` or `main` that touches `backend/**`, the workflow runs
