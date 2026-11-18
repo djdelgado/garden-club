@@ -8,9 +8,10 @@ single source of truth; it ships as the ``CommonLayer`` Lambda layer
 (``backend/layers/common``) and is mounted at ``/opt/python`` so each function
 imports it as ``from gardenclub_common import ...``.
 
-The layer bundles no third-party dependencies of its own — ``boto3`` is provided
-by the Lambda runtime and ``aws-lambda-powertools`` by each function's package —
-so this file only imports things already on the path at runtime.
+The layer also carries the shared third-party dependencies (``boto3``,
+``aws-lambda-powertools``, ``pydantic``, pinned in ``layers/common/requirements.txt``
+and installed by ``layers/common/Makefile``), so per-function requirements.txt
+files list only what is unique to that function.
 """
 
 import json
