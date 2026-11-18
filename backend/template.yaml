@@ -26,6 +26,8 @@ Globals:
     Timeout: 30
     MemorySize: 256
     Runtime: python3.12
+    Layers:
+      - !Ref CommonLayer
     Environment:
       Variables:
         EVENTS_TABLE_NAME: !Ref EventsTable
@@ -46,6 +48,26 @@ Globals:
         S3_PUBLIC_ENDPOINT: !Ref S3PublicEndpoint
 
 Resources:
+  # Shared handler boilerplate (format_response, boto3/LocalStack bootstrap,
+  # JWT claims parsing, DynamoDB pagination) — see backend/layers/common and
+  # issue #52. Attached to every function via Globals.Function.Layers so the
+  # code lives in exactly one place instead of a copy per function.
+  CommonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub 'garden-club-common-${Stage}'
+      Description: Shared Python helpers for Garden Club Lambda handlers
+      ContentUri: layers/common/
+      CompatibleRuntimes:
+        - python3.12
+      RetentionPolicy: Delete
+    Metadata:
+      # Custom build (see layers/common/Makefile): pip-install the shared deps
+      # AND copy the first-party gardenclub_common module into python/. The
+      # built-in python3.12 BuildMethod only installs requirements and would drop
+      # the module, so a makefile target handles both.
+      BuildMethod: makefile
+
   # Cognito User Pool
   GardenClubUserPool:
     Type: AWS::Cognito::UserPool

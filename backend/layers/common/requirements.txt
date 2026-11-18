@@ -1,0 +1,7 @@
+# Single source of truth for the Python dependencies shared by every Garden Club
+# Lambda handler. Installed into the CommonLayer and mounted at /opt/python, so
+# the per-function requirements.txt files no longer each pin (and drift on) these.
+# See issue #52.
+boto3==1.34.0
+aws-lambda-powertools==2.29.0
+pydantic==2.5.0
