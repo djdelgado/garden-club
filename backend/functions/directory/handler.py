@@ -21,21 +21,18 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
 from aws_lambda_powertools import Logger
-from botocore.config import Config
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
+from gardenclub_common import S3_LOCALSTACK_CONFIG, aws_kwargs, format_response, is_admin, scan_all
 from db_types import DirectoryEntryItem
 
 logger = Logger()
 
-aws_kwargs = {"region_name": os.environ.get("AWS_REGION", "us-east-1")}
-if localstack_endpoint := os.environ.get("LOCALSTACK_ENDPOINT"):
-    aws_kwargs["endpoint_url"] = localstack_endpoint
+# Preserved for presigned_get's LocalStack URL rewrite below.
+localstack_endpoint = os.environ.get("LOCALSTACK_ENDPOINT")
 
-s3_config = Config(s3={"payload_signing_enabled": False})
-
-dynamodb = boto3.resource("dynamodb", **aws_kwargs)
-s3_client = boto3.client("s3", config=s3_config, **aws_kwargs)
+dynamodb = boto3.resource("dynamodb", **aws_kwargs())
+s3_client = boto3.client("s3", config=S3_LOCALSTACK_CONFIG, **aws_kwargs())
 
 directory_table = dynamodb.Table(os.environ.get("DIRECTORY_TABLE_NAME", "GardenClubDirectory"))
 members_table = dynamodb.Table(os.environ.get("MEMBERS_TABLE_NAME", "GardenClubMembers"))
@@ -115,73 +112,8 @@ def validation_message(err: ValidationError) -> str:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def format_response(status_code: int, body: Any) -> Dict[str, Any]:
-    return {
-        "statusCode": status_code,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body, default=str),
-    }
-
-
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def get_claims(event: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract JWT claims (HTTP API v2 path: requestContext.authorizer.jwt.claims).
-
-    Local escape hatch: when running against LocalStack (which has no Cognito and
-    where sam local doesn't emulate the JWT authorizer) fall back to LOCAL_DEV_CLAIMS.
-    Double-gated on LOCALSTACK_ENDPOINT so a Lambda in AWS — which never has it — can
-    never take this branch. This is an env-gated auth bypass; it logs loudly.
-    """
-    claims = (
-        event.get("requestContext", {})
-        .get("authorizer", {})
-        .get("jwt", {})
-        .get("claims", {})
-    ) or {}
-
-    if not claims and os.environ.get("LOCALSTACK_ENDPOINT") and os.environ.get("LOCAL_DEV_CLAIMS"):
-        logger.warning(
-            "⚠️ LOCAL_DEV_CLAIMS auth bypass ACTIVE — trusting env-provided claims. "
-            "This must only ever happen in local dev against LocalStack."
-        )
-        try:
-            claims = json.loads(os.environ["LOCAL_DEV_CLAIMS"])
-        except json.JSONDecodeError:
-            logger.exception("Failed to parse LOCAL_DEV_CLAIMS")
-
-    return claims
-
-
-def parse_groups(claims: Dict[str, Any]) -> List[str]:
-    """Parse cognito:groups. HTTP API emits a bracketed string: "[Admins]" or
-    "[Admins, Editors]" — a naive split on "," would never match."""
-    groups = claims.get("cognito:groups", "")
-    if isinstance(groups, list):
-        return [str(g).strip() for g in groups]
-    text = str(groups).strip()
-    if text.startswith("[") and text.endswith("]"):
-        text = text[1:-1]
-    return [g.strip() for g in text.split(",") if g.strip()]
-
-
-def is_admin(event: Dict[str, Any]) -> bool:
-    """Check whether the caller belongs to the Cognito Admins group."""
-    return "Admins" in parse_groups(get_claims(event))
-
-
-def scan_all(table, **kwargs) -> list:
-    """Scan following LastEvaluatedKey (DynamoDB caps each page at 1 MB)."""
-    items: list = []
-    while True:
-        response = table.scan(**kwargs)
-        items.extend(response.get("Items", []))
-        last_key = response.get("LastEvaluatedKey")
-        if not last_key:
-            return items
-        kwargs["ExclusiveStartKey"] = last_key
 
 
 def presigned_get(key: str, expiration: int = 3600) -> str:
