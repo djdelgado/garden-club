@@ -113,7 +113,7 @@ export function ImageModal({
           position: "relative",
           bgcolor: "rgba(0,0,0,0.9)",
           borderRadius: 1,
-          maxWidth: "90vw",
+          maxWidth: { xs: "96vw", sm: "90vw" },
           maxHeight: "90vh",
           overflow: "auto",
         }}
@@ -174,7 +174,14 @@ export function ImageModal({
           </IconButton>
         )}
 
-        <Box sx={{ p: 2 }}>
+        <Box
+          sx={{
+            p: { xs: 1, sm: 2 },
+            // Keep the photo inside the box (its max width minus padding) so
+            // it never forces a horizontal scroll on phones.
+            "& img": { maxWidth: { xs: "calc(96vw - 16px)", sm: "calc(90vw - 32px)" } },
+          }}
+        >
           <Image
             src={imageSrc(image)}
             alt={image.fileName}
@@ -189,7 +196,6 @@ export function ImageModal({
             style={{
               width: "auto",
               height: "auto",
-              maxWidth: "86vw",
               maxHeight: "80vh",
               objectFit: "contain",
               borderRadius: "4px",
@@ -197,7 +203,7 @@ export function ImageModal({
           />
           <Typography
             variant="body2"
-            sx={{ color: "white", mt: 1, textAlign: "center" }}
+            sx={{ color: "white", mt: 1, textAlign: "center", overflowWrap: "anywhere" }}
           >
             {image.fileName}
           </Typography>

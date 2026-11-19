@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PersonIcon from "@mui/icons-material/PersonOutlined";
+import MenuIcon from "@mui/icons-material/Menu";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "aws-amplify/auth";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,6 +43,9 @@ export function TopNav() {
   const [initials, setInitials] = useState("");
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const menuOpen = Boolean(anchorEl);
+  // Below `md` the nav links collapse into this menu so they never overflow.
+  const [navAnchorEl, setNavAnchorEl] = useState<null | HTMLElement>(null);
+  const navMenuOpen = Boolean(navAnchorEl);
 
   const handleAvatarClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -76,12 +80,12 @@ export function TopNav() {
 
   return (
     <AppBar position="sticky" color="transparent" elevation={0} sx={{ borderBottom: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}>
-      <Toolbar sx={{ gap: 2, justifyContent: "space-between", flexWrap: "wrap" }}>
+      <Toolbar sx={{ gap: { xs: 1, md: 2 }, justifyContent: "space-between", px: { xs: 2, sm: 3 } }}>
         {/* Logo */}
         <Box
           component="a"
           href="/home"
-          sx={{ display: "flex", alignItems: "center", gap: 1, textDecoration: "none", color: "inherit", mr: 2 }}
+          sx={{ display: "flex", alignItems: "center", gap: 1, textDecoration: "none", color: "inherit", mr: { xs: 0, md: 2 }, flexShrink: 0 }}
         >
           <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <circle cx="14" cy="14" r="5" fill="#6B8F6B" />
@@ -94,16 +98,18 @@ export function TopNav() {
             <ellipse cx="8.5" cy="19.5" rx="3" ry="4.5" fill="#A8C5A8" transform="rotate(45 8.5 19.5)" />
             <ellipse cx="19.5" cy="19.5" rx="3" ry="4.5" fill="#A8C5A8" transform="rotate(-45 19.5 19.5)" />
           </svg>
-          <Typography variant="h6">
-            <div>
-              <div style={{ fontSize: "1rem", fontWeight: 700, color: "primary.dark", letterSpacing: "0.04em", lineHeight: 1.1 }}>English Turn</div>
-              <div style={{ fontSize: "0.65rem", color: "primary.light", letterSpacing: "0.12em", textTransform: "uppercase" }}>Garden Club</div>
-            </div>
-          </Typography>
+          <Box>
+            <Typography component="div" sx={{ fontSize: "1rem", fontWeight: 700, color: "primary.dark", letterSpacing: "0.04em", lineHeight: 1.1, whiteSpace: "nowrap" }}>
+              English Turn
+            </Typography>
+            <Typography component="div" sx={{ fontSize: "0.65rem", color: "primary.light", letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+              Garden Club
+            </Typography>
+          </Box>
         </Box>
 
-        {/* Nav links */}
-        <Box sx={{ display: "flex", gap: 1, flex: 1 }}>
+        {/* Nav links (md and up) */}
+        <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1, flex: 1 }}>
           {navLinks.map((link) => {
             const active = pathname.startsWith(link.href);
             return (
@@ -126,50 +132,86 @@ export function TopNav() {
           })}
         </Box>
 
-        {/* User avatar with dropdown */}
-        {!loading && user && (
-          <Box sx={{ display: "flex", alignItems: "center" }}>
+        {/* Nav menu (below md) + user avatar with dropdown */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: "auto" }}>
+          <Box sx={{ display: { xs: "block", md: "none" } }}>
             <IconButton
-              onClick={handleAvatarClick}
-              size="small"
-              aria-label="Account menu"
-              aria-controls={menuOpen ? "account-menu" : undefined}
+              onClick={(e) => setNavAnchorEl(e.currentTarget)}
+              aria-label="Navigation menu"
+              aria-controls={navMenuOpen ? "nav-menu" : undefined}
               aria-haspopup="true"
-              aria-expanded={menuOpen ? "true" : undefined}
+              aria-expanded={navMenuOpen ? "true" : undefined}
             >
-              <Avatar sx={{ bgcolor: "primary.main", width: 34, height: 34, fontSize: 14 }}>
-                {initials}
-              </Avatar>
+              <MenuIcon />
             </IconButton>
             <Menu
-              id="account-menu"
-              anchorEl={anchorEl}
-              open={menuOpen}
-              onClose={handleMenuClose}
+              id="nav-menu"
+              anchorEl={navAnchorEl}
+              open={navMenuOpen}
+              onClose={() => setNavAnchorEl(null)}
               anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
               transformOrigin={{ vertical: "top", horizontal: "right" }}
             >
-              <MenuItem
-                onClick={() => {
-                  handleMenuClose();
-                  router.push("/profile");
-                }}
-                selected={pathname.startsWith("/profile")}
-              >
-                <ListItemIcon>
-                  <PersonIcon fontSize="small" />
-                </ListItemIcon>
-                My profile
-              </MenuItem>
-              <MenuItem onClick={handleSignOut}>
-                <ListItemIcon>
-                  <LogoutIcon fontSize="small" />
-                </ListItemIcon>
-                Log out
-              </MenuItem>
+              {navLinks.map((link) => (
+                <MenuItem
+                  key={link.href}
+                  selected={pathname.startsWith(link.href)}
+                  onClick={() => {
+                    setNavAnchorEl(null);
+                    router.push(link.href);
+                  }}
+                  sx={{ minWidth: 180 }}
+                >
+                  {link.label}
+                </MenuItem>
+              ))}
             </Menu>
           </Box>
-        )}
+
+          {!loading && user && (
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <IconButton
+                onClick={handleAvatarClick}
+                size="small"
+                aria-label="Account menu"
+                aria-controls={menuOpen ? "account-menu" : undefined}
+                aria-haspopup="true"
+                aria-expanded={menuOpen ? "true" : undefined}
+              >
+                <Avatar sx={{ bgcolor: "primary.main", width: 34, height: 34, fontSize: 14 }}>
+                  {initials}
+                </Avatar>
+              </IconButton>
+              <Menu
+                id="account-menu"
+                anchorEl={anchorEl}
+                open={menuOpen}
+                onClose={handleMenuClose}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+              >
+                <MenuItem
+                  onClick={() => {
+                    handleMenuClose();
+                    router.push("/profile");
+                  }}
+                  selected={pathname.startsWith("/profile")}
+                >
+                  <ListItemIcon>
+                    <PersonIcon fontSize="small" />
+                  </ListItemIcon>
+                  My profile
+                </MenuItem>
+                <MenuItem onClick={handleSignOut}>
+                  <ListItemIcon>
+                    <LogoutIcon fontSize="small" />
+                  </ListItemIcon>
+                  Log out
+                </MenuItem>
+              </Menu>
+            </Box>
+          )}
+        </Box>
       </Toolbar>
     </AppBar>
   );

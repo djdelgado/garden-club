@@ -33,18 +33,18 @@ export function MemberCard({ member }: MemberCardProps) {
         <Avatar
           src={member.photoUrl}
           alt={displayName}
-          sx={{ bgcolor: "primary.main", width: 56, height: 56, fontSize: 20 }}
+          sx={{ bgcolor: "primary.main", width: 56, height: 56, fontSize: 20, flexShrink: 0 }}
         >
           {memberInitials(member)}
         </Avatar>
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
             {displayName}
           </Typography>
 
           <ContactRow icon={<EmailIcon fontSize="small" />}>
-            <Link href={`mailto:${member.email}`} underline="hover" noWrap>
+            <Link href={`mailto:${member.email}`} underline="hover">
               {member.email}
             </Link>
           </ContactRow>
@@ -75,12 +75,14 @@ function ContactRow({ icon, children }: { icon: React.ReactNode; children: React
     <Box
       sx={{
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         gap: 1,
         mt: 0.5,
         color: "text.secondary",
         minWidth: 0,
-        "& a": { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" },
+        // Wrap long emails/addresses rather than cutting them off.
+        "& > :last-child": { minWidth: 0, overflowWrap: "anywhere" },
+        "& > svg": { flexShrink: 0, mt: "2px" },
       }}
     >
       {icon}

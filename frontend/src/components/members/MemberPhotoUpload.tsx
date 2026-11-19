@@ -58,8 +58,8 @@ export function MemberPhotoUpload({
   };
 
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-      <Box sx={{ position: "relative" }}>
+    <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+      <Box sx={{ position: "relative", flexShrink: 0 }}>
         <Avatar
           src={member.photoUrl}
           alt={member.name || member.email}

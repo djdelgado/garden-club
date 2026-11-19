@@ -20,7 +20,6 @@ import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import Image from "next/image";
 import { Event, RsvpSummary } from "@/types/event";
 import { EventService } from "@/services/eventService";
-import { IMAGES_BASE_URL } from "@/lib/constants";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 
 interface EventDetailModalProps {
@@ -93,10 +92,10 @@ export function EventDetailModal({
 
   return (
     <Dialog open={!!event} onClose={onClose} maxWidth="md" fullWidth>
-      {event.headerImageKey && (
-        <Box sx={{ position: "relative", width: "100%", height: 280 }}>
+      {event.headerImageUrl && (
+        <Box sx={{ position: "relative", width: "100%", height: { xs: 180, sm: 280 } }}>
           <Image
-            src={`${IMAGES_BASE_URL}/${event.headerImageKey}`}
+            src={event.headerImageUrl}
             alt={event.title}
             fill
             style={{ objectFit: "cover" }}
@@ -107,11 +106,11 @@ export function EventDetailModal({
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <CalendarTodayIcon fontSize="small" color="action" />
+            <CalendarTodayIcon fontSize="small" color="action" sx={{ flexShrink: 0 }} />
             <Typography variant="body2">{formatDate(startDate)}</Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <AccessTimeIcon fontSize="small" color="action" />
+            <AccessTimeIcon fontSize="small" color="action" sx={{ flexShrink: 0 }} />
             <Typography variant="body2">
               {formatTime(startDate)} – {formatTime(endDate)}
             </Typography>

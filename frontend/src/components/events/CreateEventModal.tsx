@@ -22,6 +22,17 @@ import { EventService } from "@/services/eventService";
 import { Event } from "@/types/event";
 import { v4 as uuidv4 } from "uuid";
 
+const HOUR_MS = 60 * 60 * 1000;
+
+/** The next whole hour from now, e.g. 10:37 -> 11:00. */
+function nextWholeHour(): Date {
+  const d = new Date(Date.now() + HOUR_MS);
+  d.setMinutes(0, 0, 0);
+  return d;
+}
+
+const isValidDate = (d: Date | null): d is Date => !!d && !Number.isNaN(d.getTime());
+
 interface CreateEventModalProps {
   open: boolean;
   isEdit?: boolean;
@@ -39,13 +50,16 @@ export function CreateEventModal({
 }: CreateEventModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [startTime, setStartTime] = useState<Date | null>(new Date());
+  const [startTime, setStartTime] = useState<Date | null>(() => nextWholeHour());
   const [endTime, setEndTime] = useState<Date | null>(
-    new Date(Date.now() + 3600000)
+    () => new Date(nextWholeHour().getTime() + HOUR_MS)
   );
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerKey, setBannerKey] = useState<string | null>(null);
   const [bannerUploading, setBannerUploading] = useState(false);
+  // What to show as the banner preview: a local object URL for a fresh pick,
+  // or the server URL for an existing event's banner.
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -57,20 +71,47 @@ export function CreateEventModal({
       setStartTime(new Date(event.startTime));
       setEndTime(new Date(event.endTime));
       setBannerKey(event.headerImageKey ?? null);
+      setBannerPreview(event.headerImageUrl ?? null);
       setBannerFile(null);
     }
   }, [open, isEdit, event]);
 
+  // Release local preview object URLs when they are replaced or unmounted.
+  useEffect(() => {
+    return () => {
+      if (bannerPreview?.startsWith("blob:")) URL.revokeObjectURL(bannerPreview);
+    };
+  }, [bannerPreview]);
+
+  // Picking a start time moves the end time to one hour later, so the common
+  // case needs only one picker.
+  const handleStartChange = (value: Date | null) => {
+    setStartTime(value);
+    if (isValidDate(value)) {
+      setEndTime(new Date(value.getTime() + HOUR_MS));
+    }
+  };
+
   const handleBannerSelect = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file for the banner");
+      return;
+    }
     setBannerFile(file);
     setBannerUploading(true);
     setError(null);
     try {
-      const uploads = await ImageService.presignUpload("event-banners", [{ fileName: file.name }]);
+      // The content type is signed into the presigned URL, so it must be sent
+      // on presign and on the PUT, and both must match.
+      const uploads = await ImageService.presignUpload("event-banners", [
+        { fileName: file.name, contentType: file.type },
+      ]);
       const { uploadUrl, imageKey } = uploads[0];
-      await ImageService.uploadToS3(uploadUrl, file);
+      await ImageService.uploadToS3(uploadUrl, file, file.type);
       setBannerKey(imageKey);
-    } catch {
+      setBannerPreview(URL.createObjectURL(file));
+    } catch (err) {
+      console.error("Banner upload failed", err);
       setError("Failed to upload banner image");
       setBannerFile(null);
     } finally {
@@ -81,6 +122,14 @@ export function CreateEventModal({
   const handleSubmit = async () => {
     if (!title.trim() || !description.trim() || !startTime || !endTime) {
       setError("Please fill in all required fields");
+      return;
+    }
+    if (!isValidDate(startTime) || !isValidDate(endTime)) {
+      setError("Please enter a valid start and end time");
+      return;
+    }
+    if (endTime <= startTime) {
+      setError("End time must be after the start time");
       return;
     }
 
@@ -118,10 +167,12 @@ export function CreateEventModal({
   const handleClose = () => {
     setTitle("");
     setDescription("");
-    setStartTime(new Date());
-    setEndTime(new Date(Date.now() + 3600000));
+    const start = nextWholeHour();
+    setStartTime(start);
+    setEndTime(new Date(start.getTime() + HOUR_MS));
     setBannerFile(null);
     setBannerKey(null);
+    setBannerPreview(null);
     setError(null);
     onClose();
   };
@@ -155,14 +206,16 @@ export function CreateEventModal({
             <DateTimePicker
               label="Start Time"
               value={startTime}
-              onChange={(newValue) => setStartTime(newValue)}
+              onChange={handleStartChange}
               disabled={loading}
             />
             <DateTimePicker
               label="End Time"
               value={endTime}
               onChange={(newValue) => setEndTime(newValue)}
+              minDateTime={isValidDate(startTime) ? startTime : undefined}
               disabled={loading}
+              slotProps={{ textField: { helperText: "Set automatically to 1 hour after the start" } }}
             />
           </LocalizationProvider>
 
@@ -186,6 +239,7 @@ export function CreateEventModal({
               onClick={() => fileInputRef.current?.click()}
               disabled={loading || bannerUploading}
               size="small"
+              sx={{ maxWidth: "100%", overflowWrap: "anywhere", textAlign: "left" }}
             >
               {bannerUploading
                 ? "Uploading..."
@@ -193,10 +247,25 @@ export function CreateEventModal({
                 ? bannerFile.name
                 : "Choose Image"}
             </Button>
-            {bannerKey && (
+            {bannerKey && !bannerUploading && (
               <Typography variant="caption" color="success.main" sx={{ ml: 1 }}>
                 Uploaded
               </Typography>
+            )}
+            {bannerPreview && (
+              <Box
+                component="img"
+                src={bannerPreview}
+                alt="Banner preview"
+                sx={{
+                  display: "block",
+                  mt: 1.5,
+                  width: "100%",
+                  maxHeight: 160,
+                  objectFit: "cover",
+                  borderRadius: 1,
+                }}
+              />
             )}
           </Box>
         </Box>
