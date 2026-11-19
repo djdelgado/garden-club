@@ -12,6 +12,7 @@ import {
   IconButton,
   Tooltip,
   Box,
+  Typography,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -36,11 +37,11 @@ export function MemberList({
 }: MemberListProps) {
   return (
     <TableContainer component={Paper} variant="outlined">
-      <Table>
+      <Table sx={{ "& td, & th": { px: { xs: 1, sm: 2 } } }}>
         <TableHead>
           <TableRow>
             <TableCell>Name</TableCell>
-            <TableCell>Email</TableCell>
+            <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Email</TableCell>
             <TableCell>Status</TableCell>
             <TableCell align="right">Actions</TableCell>
           </TableRow>
@@ -51,8 +52,20 @@ export function MemberList({
             const isInvited = member.status === "INVITED";
             return (
               <TableRow key={member.memberId} hover>
-                <TableCell>{member.name || "—"}</TableCell>
-                <TableCell>{member.email}</TableCell>
+                <TableCell sx={{ overflowWrap: "anywhere" }}>
+                  {member.name || "—"}
+                  {/* On phones the Email column is hidden; show it here instead. */}
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: { xs: "block", sm: "none" } }}
+                  >
+                    {member.email}
+                  </Typography>
+                </TableCell>
+                <TableCell sx={{ display: { xs: "none", sm: "table-cell" }, overflowWrap: "anywhere" }}>
+                  {member.email}
+                </TableCell>
                 <TableCell>
                   <Chip
                     size="small"

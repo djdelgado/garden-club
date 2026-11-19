@@ -118,7 +118,7 @@ export function ImportDirectoryDialog({ open, onClose, onImported }: ImportDirec
           {error && <Alert severity="error">{error}</Alert>}
 
           {!result && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
               <input
                 ref={inputRef}
                 type="file"
@@ -135,7 +135,7 @@ export function ImportDirectoryDialog({ open, onClose, onImported }: ImportDirec
                 {fileName ? "Choose a different file" : "Choose file"}
               </Button>
               {fileName && (
-                <Typography variant="body2" color="text.secondary" noWrap>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0, overflowWrap: "anywhere" }}>
                   {fileName}
                 </Typography>
               )}

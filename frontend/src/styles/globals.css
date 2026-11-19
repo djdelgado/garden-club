@@ -11,6 +11,9 @@ body {
     "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Break long unspaced strings (emails, file names) instead of letting them
+     push the layout wider than a phone screen. */
+  overflow-wrap: break-word;
 }
 
 * {

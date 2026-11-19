@@ -144,6 +144,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 {"error": "Missing or invalid field: files (must be an array)"}
             )
 
+        # The content type is signed into the presigned PUT, so S3 rejects any
+        # upload whose Content-Type differs. Without one, boto3 cannot even
+        # build the URL (ParamValidationError -> opaque 500), so fail fast.
+        missing_type = [
+            f.get("fileName") for f in files
+            if isinstance(f, dict) and f.get("fileName") and not f.get("contentType")
+        ]
+        if missing_type:
+            return format_response(
+                400,
+                {"error": f"Missing contentType for: {', '.join(missing_type)}"}
+            )
+
         # Check if folder already has images
         user_id = get_user_id(event)
         now_dt = datetime.now(timezone.utc)

@@ -2,14 +2,14 @@
 
 import {
   Box,
-  Button,
   Card,
   CardContent,
   Container,
   Typography,
 } from "@mui/material";
-import { useRouter } from "next/navigation";
 import { UpcomingEventsStrip } from "@/components/events/UpcomingEventsStrip";
+
+const HERO_IMAGE = "/images/english-turn-entrance.jpg";
 
 const FEATURE_CARDS = [
   {
@@ -30,79 +30,57 @@ const FEATURE_CARDS = [
 ];
 
 export default function HomePage() {
-  const router = useRouter();
-
   return (
     <Box>
       {/* Hero */}
       <Box
         sx={{
-          background:
-            "linear-gradient(135deg, #2d4a32 0%, #4a7c59 60%, #6aab7a 100%)",
+          // The English Turn entrance photo under a deep-green wash: dark enough
+          // at the top for the headline, lighter at the bottom so the
+          // greenery and sign still read through.
+          backgroundImage: `linear-gradient(180deg, rgba(29,51,34,0.88) 0%, rgba(29,51,34,0.62) 55%, rgba(29,51,34,0.35) 100%), url(${HERO_IMAGE})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center 65%",
+          backgroundColor: "#2d4a32",
           borderRadius: "0 0 2rem 2rem",
-          px: { xs: 3, md: 6 },
-          py: { xs: 8, md: 10 },
-          mb: 6,
+          px: { xs: 2.5, md: 6 },
+          py: { xs: 6, md: 10 },
+          mb: 3,
           position: "relative",
           overflow: "hidden",
           textAlign: "center",
           color: "#fff",
         }}
       >
-        {/* Decorative circles */}
-        <Box
-          aria-hidden="true"
-          sx={{
-            position: "absolute",
-            top: -60,
-            right: -60,
-            width: 220,
-            height: 220,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.05)",
-            pointerEvents: "none",
-          }}
-        />
-        <Box
-          aria-hidden="true"
-          sx={{
-            position: "absolute",
-            bottom: -40,
-            left: -40,
-            width: 160,
-            height: 160,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.05)",
-            pointerEvents: "none",
-          }}
-        />
-
         {/* Badge */}
         <Box
           sx={{
             display: "inline-flex",
             alignItems: "center",
             gap: 0.5,
-            background: "rgba(255,255,255,0.12)",
+            background: "rgba(255,255,255,0.16)",
+            backdropFilter: "blur(4px)",
             borderRadius: 20,
             px: 2,
             py: 0.5,
             mb: 2,
-            fontSize: "0.75rem",
-            letterSpacing: "0.12em",
+            maxWidth: "100%",
+            fontSize: { xs: "0.7rem", sm: "0.75rem" },
+            letterSpacing: { xs: "0.08em", sm: "0.12em" },
             textTransform: "uppercase",
           }}
         >
-          🌿 Established 1947 · New Orleans, LA
+          🌿 Established 1988 · New Orleans, LA
         </Box>
 
         <Typography
           variant="h1"
           sx={{
-            fontSize: "clamp(2.2rem, 5vw, 3.5rem)",
+            fontSize: "clamp(1.9rem, 7vw, 3.5rem)",
             fontWeight: 700,
             lineHeight: 1.15,
             mb: 2,
+            textShadow: "0 2px 12px rgba(0,0,0,0.35)",
           }}
         >
           Cultivating Community
@@ -120,54 +98,24 @@ export default function HomePage() {
             fontSize: "1.05rem",
             maxWidth: 480,
             mx: "auto",
-            mb: 4,
-            opacity: 0.85,
+            opacity: 0.92,
             lineHeight: 1.7,
+            textShadow: "0 1px 8px rgba(0,0,0,0.4)",
           }}
         >
           {"A welcoming society of passionate gardeners sharing knowledge, beauty, and Louisiana's rich horticultural heritage."}
         </Typography>
-
-        <Box
-          sx={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "wrap" }}
-        >
-          <Button
-            variant="contained"
-            size="large"
-            onClick={() => router.push("/events")}
-            sx={{
-              bgcolor: "#fff",
-              color: "#2d4a32",
-              fontWeight: 600,
-              "&:hover": { bgcolor: "#f0f7f0" },
-            }}
-          >
-            Upcoming Events
-          </Button>
-          {/* May not be needed until we have a membership system in place */}
-          {/* <Button
-            variant="outlined"
-            size="large"
-            sx={{
-              color: "#fff",
-              borderColor: "rgba(255,255,255,0.5)",
-              "&:hover": {
-                borderColor: "#fff",
-                bgcolor: "rgba(255,255,255,0.08)",
-              },
-            }}
-          >
-            Join the Club
-          </Button> */}
-        </Box>
       </Box>
 
       <Container maxWidth="lg">
+        {/* Upcoming-events CTA strip (wired to the events API) */}
+        <UpcomingEventsStrip />
+
         {/* Feature cards */}
         <Box
           sx={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" },
             gap: 2.5,
             mb: 5,
           }}
@@ -181,7 +129,7 @@ export default function HomePage() {
                 borderRadius: "1rem",
               }}
             >
-              <CardContent sx={{ p: 3.5 }}>
+              <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
                 <Box sx={{ fontSize: "2rem", mb: 1.5 }}>{card.icon}</Box>
                 <Typography
                   variant="h6"
@@ -199,9 +147,6 @@ export default function HomePage() {
             </Card>
           ))}
         </Box>
-
-        {/* Upcoming-events CTA strip (wired to the events API) */}
-        <UpcomingEventsStrip />
       </Container>
     </Box>
   );

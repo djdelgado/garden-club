@@ -17,6 +17,7 @@ files list only what is unique to that function.
 import json
 import os
 from typing import Any, Dict, List
+from urllib.parse import quote
 
 from aws_lambda_powertools import Logger
 from botocore.config import Config
@@ -43,6 +44,28 @@ def aws_kwargs() -> Dict[str, Any]:
     if localstack_endpoint := os.environ.get("LOCALSTACK_ENDPOINT"):
         kwargs["endpoint_url"] = localstack_endpoint
     return kwargs
+
+
+def build_image_url(s3_client: Any, bucket: str, s3_key: str) -> str:
+    """Build a browser-facing URL for an object in the images bucket.
+
+    The bucket is private (CloudFront reads it via Origin Access Control), so a
+    plain ``https://<bucket>.s3...`` URL is a 403. In AWS, return a stable
+    CloudFront URL (``https://<IMAGES_CDN_DOMAIN>/<key>``); keys are immutable
+    UUID paths, so CloudFront and the browser can cache it indefinitely.
+
+    Under LocalStack there is no CloudFront, so fall back to a presigned S3 GET
+    (gated on LOCALSTACK_ENDPOINT being set).
+    """
+    if os.environ.get("LOCALSTACK_ENDPOINT"):
+        return s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": s3_key},
+            ExpiresIn=3600,
+        )
+    cdn_domain = os.environ.get("IMAGES_CDN_DOMAIN", "")
+    # quote each path segment but keep the slashes between them.
+    return f"https://{cdn_domain}/{quote(s3_key, safe='/')}"
 
 
 def format_response(status_code: int, body: Any) -> Dict[str, Any]:

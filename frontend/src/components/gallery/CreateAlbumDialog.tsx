@@ -365,7 +365,7 @@ export function CreateAlbumDialog({
               border: "2px dashed",
               borderColor: dragOver ? "primary.main" : "grey.400",
               borderRadius: 2,
-              p: 4,
+              p: { xs: 2.5, sm: 4 },
               textAlign: "center",
               cursor: "pointer",
               bgcolor: dragOver ? "action.hover" : "background.paper",
@@ -428,7 +428,7 @@ export function CreateAlbumDialog({
                           ) : undefined
                         }
                         slotProps={{
-                          primary: { variant: "caption" },
+                          primary: { variant: "caption", sx: { overflowWrap: "anywhere" } },
                           secondary: {
                             // The uploading row nests a LinearProgress (a div),
                             // which is invalid inside the default <p>.
