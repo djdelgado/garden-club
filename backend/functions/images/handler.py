@@ -1,12 +1,13 @@
 import json
 import os
 from typing import Any, Dict
-from urllib.parse import parse_qs, quote
+from urllib.parse import parse_qs
 
 import boto3
 from aws_lambda_powertools import Logger
 
 from gardenclub_common import aws_kwargs, format_response, is_admin, query_all, scan_all
+from gardenclub_common import build_image_url as common_build_image_url
 from db_types import ImageItem, FolderMetadata
 
 logger = Logger()
@@ -17,28 +18,11 @@ s3_client = boto3.client("s3", **aws_kwargs())
 images_table = dynamodb.Table(os.environ.get("IMAGES_TABLE_NAME", "GardenClubImages"))
 folders_table = dynamodb.Table(os.environ.get("FOLDERS_TABLE_NAME", "GardenClubFolders"))
 images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
-images_cdn_domain = os.environ.get("IMAGES_CDN_DOMAIN", "")
 
 
 def build_image_url(s3_key: str) -> str:
-    """Build a browser-facing URL for an image.
-
-    In AWS, return a stable CloudFront URL (``https://<cdn>/<key>``). Because the
-    key is an immutable UUID path, the URL never changes, so CloudFront and the
-    browser can cache it indefinitely.
-
-    Under LocalStack there is no CloudFront, so fall back to a presigned S3 URL
-    (the per-request signature defeats caching, but that only affects local dev).
-    The fallback is gated on LOCALSTACK_ENDPOINT being set.
-    """
-    if os.environ.get("LOCALSTACK_ENDPOINT"):
-        return s3_client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": images_bucket, "Key": s3_key},
-            ExpiresIn=3600,
-        )
-    # quote each path segment but keep the slashes between them.
-    return f"https://{images_cdn_domain}/{quote(s3_key, safe='/')}"
+    """CloudFront URL in AWS, presigned GET under LocalStack (see gardenclub_common)."""
+    return common_build_image_url(s3_client, images_bucket, s3_key)
 
 
 def adjust_folder_count(folder_name: str, delta: int) -> None:

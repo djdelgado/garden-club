@@ -8,7 +8,14 @@ from aws_lambda_powertools import Logger
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, ValidationError
 
-from gardenclub_common import aws_kwargs, format_response, get_claims, get_user_id, is_admin
+from gardenclub_common import (
+    aws_kwargs,
+    build_image_url,
+    format_response,
+    get_claims,
+    get_user_id,
+    is_admin,
+)
 from db_types import EventItem, MemberItem
 
 logger = Logger()
@@ -16,6 +23,8 @@ logger = Logger()
 dynamodb = boto3.resource("dynamodb", **aws_kwargs())
 events_table = dynamodb.Table(os.environ.get("EVENTS_TABLE_NAME", "GardenClubEvents"))
 members_table = dynamodb.Table(os.environ.get("MEMBERS_TABLE_NAME", "GardenClubMembers"))
+s3_client = boto3.client("s3", **aws_kwargs())
+images_bucket = os.environ.get("IMAGES_BUCKET_NAME", "garden-club-images")
 
 
 class Event(BaseModel):
@@ -59,10 +68,13 @@ def rsvp_set(item: Dict[str, Any]) -> Set[str]:
 
 
 def with_rsvp_summary(item: Dict[str, Any], member_id: Optional[str]) -> Dict[str, Any]:
-    """Replace the raw `rsvps` set (not JSON serializable) with per-caller summary
-    fields the frontend consumes."""
+    """Shape a stored event for the client: replace the raw `rsvps` set (not JSON
+    serializable) with per-caller summary fields, and resolve the banner key to a
+    browser-loadable `headerImageUrl` (the images bucket itself is private)."""
     attendees = rsvp_set(item)
     enriched = {k: v for k, v in item.items() if k != "rsvps"}
+    if header_key := enriched.get("headerImageKey"):
+        enriched["headerImageUrl"] = build_image_url(s3_client, images_bucket, header_key)
     enriched["rsvpCount"] = len(attendees)
     enriched["isAttending"] = member_id is not None and member_id in attendees
     return enriched
@@ -172,8 +184,10 @@ def update_event(event_id: str, body: str, event: Dict[str, Any]) -> Dict[str, A
             return format_response(404, {"error": "Event not found"})
 
         existing_item = response["Item"]
-        # Never let a client overwrite the RSVP set through PUT.
+        # Never let a client overwrite the RSVP set through PUT, or persist the
+        # derived banner URL (it is recomputed from headerImageKey on read).
         data.pop("rsvps", None)
+        data.pop("headerImageUrl", None)
         existing_item.update(data)
 
         events_table.put_item(Item=existing_item)

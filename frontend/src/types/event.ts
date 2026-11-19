@@ -5,6 +5,9 @@ export interface Event {
   startTime: string;
   endTime: string;
   headerImageKey?: string;
+  // Browser-loadable banner URL (CloudFront in AWS), derived server-side from
+  // headerImageKey. The images bucket itself is private.
+  headerImageUrl?: string;
   createdAt: string;
   createdBy: string;
   // RSVP summary (computed server-side for the authenticated caller).
