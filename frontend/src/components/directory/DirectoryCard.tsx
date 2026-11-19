@@ -49,14 +49,14 @@ export function DirectoryCard({ entry, onEdit, onDelete, onInvite, inviting }: D
         <Avatar
           src={linked?.photoUrl}
           alt={entry.name}
-          sx={{ bgcolor: "primary.main", width: 56, height: 56, fontSize: 20 }}
+          sx={{ bgcolor: "primary.main", width: 56, height: 56, fontSize: 20, flexShrink: 0 }}
         >
           {initials(entry.name)}
         </Avatar>
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, minWidth: 0 }} noWrap>
+          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1, minWidth: 0 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, minWidth: 0, overflowWrap: "anywhere" }}>
               {entry.name}
             </Typography>
             {linked && (
@@ -71,7 +71,7 @@ export function DirectoryCard({ entry, onEdit, onDelete, onInvite, inviting }: D
 
           {entry.email && (
             <ContactRow icon={<EmailIcon fontSize="small" />}>
-              <Link href={`mailto:${entry.email}`} underline="hover" noWrap>
+              <Link href={`mailto:${entry.email}`} underline="hover">
                 {entry.email}
               </Link>
             </ContactRow>
@@ -136,12 +136,14 @@ function ContactRow({ icon, children }: { icon: React.ReactNode; children: React
     <Box
       sx={{
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         gap: 1,
         mt: 0.5,
         color: "text.secondary",
         minWidth: 0,
-        "& a": { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" },
+        // Wrap long emails/addresses rather than cutting them off.
+        "& > :last-child": { minWidth: 0, overflowWrap: "anywhere" },
+        "& > svg": { flexShrink: 0, mt: "2px" },
       }}
     >
       {icon}

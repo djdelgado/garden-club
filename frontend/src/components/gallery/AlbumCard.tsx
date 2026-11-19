@@ -49,6 +49,7 @@ export function AlbumCard({ folder, onClick, onRefresh }: AlbumCardProps) {
         <Box
           sx={{
             bgcolor: "primary.light",
+            height: 200,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -58,7 +59,7 @@ export function AlbumCard({ folder, onClick, onRefresh }: AlbumCardProps) {
         </Box>
       )}
       <CardContent sx={{ flex: 1 }}>
-        <Typography variant="subtitle1" noWrap>
+        <Typography variant="subtitle1" sx={{ overflowWrap: "anywhere" }}>
           {folder.folderName}
         </Typography>
         <Typography variant="caption" color="primary">

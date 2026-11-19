@@ -187,7 +187,7 @@ export default function DirectoryPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             disabled={loading}
-            sx={{ minWidth: 260 }}
+            sx={{ width: { xs: "100%", sm: "auto" }, minWidth: { sm: 260 } }}
             slotProps={{
               input: {
                 startAdornment: (

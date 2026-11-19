@@ -1,6 +1,8 @@
-import { createTheme } from "@mui/material/styles";
+import { createTheme, responsiveFontSizes } from "@mui/material/styles";
 
-export const theme = createTheme({
+// responsiveFontSizes scales the h1–h6 variants down on small screens, so page
+// titles (h2/h3 at 3.75rem/3rem by default) fit on a phone without overflowing.
+export const theme = responsiveFontSizes(createTheme({
   palette: {
     primary: {
       main: "#4a7c59",
@@ -30,6 +32,18 @@ export const theme = createTheme({
       },
     },
     MuiChip: { styleOverrides: { root: { borderRadius: 20 } } },
+    MuiDialogActions: {
+      styleOverrides: {
+        // Let action rows wrap on narrow screens instead of squeezing or
+        // overflowing; swap MUI's sibling margin for a gap so wrapped rows
+        // line up.
+        root: {
+          flexWrap: "wrap",
+          gap: 8,
+          "& > :not(style) ~ :not(style)": { marginLeft: 0 },
+        },
+      },
+    },
     MuiAppBar: {
       styleOverrides: {
         root: {
@@ -40,4 +54,4 @@ export const theme = createTheme({
       },
     },
   },
-});
+}));

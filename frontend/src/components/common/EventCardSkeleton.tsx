@@ -15,8 +15,8 @@ export function EventCardSkeleton() {
     >
       <Box
         sx={{
-          width: 90,
-          minWidth: 90,
+          width: { xs: 64, sm: 90 },
+          minWidth: { xs: 64, sm: 90 },
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -29,7 +29,7 @@ export function EventCardSkeleton() {
         <Skeleton variant="text" width={28} height={28} />
         <Skeleton variant="text" width={32} height={14} />
       </Box>
-      <Box sx={{ flex: 1, py: 1.5, px: 2 }}>
+      <Box sx={{ flex: 1, minWidth: 0, py: 1.5, px: 2 }}>
         <Skeleton variant="text" width="60%" height={28} />
         <Skeleton variant="text" width="30%" height={18} sx={{ mt: 0.25 }} />
         <Skeleton variant="text" width="80%" height={20} sx={{ mt: 0.5 }} />

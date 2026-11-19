@@ -173,10 +173,12 @@ function AlbumDetail({ folderName }: { folderName: string }) {
     <Container maxWidth="lg">
       <Box sx={{ py: 4 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-          <IconButton onClick={backClicked} aria-label="back">
+          <IconButton onClick={backClicked} aria-label="back" sx={{ flexShrink: 0 }}>
             <ArrowBackIcon />
           </IconButton>
-          <Typography variant="h2">{folderName}</Typography>
+          <Typography variant="h2" sx={{ minWidth: 0, overflowWrap: "anywhere" }}>
+            {folderName}
+          </Typography>
         </Box>
 
         {error && (

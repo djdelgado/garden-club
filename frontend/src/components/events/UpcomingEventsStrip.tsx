@@ -62,7 +62,7 @@ export function UpcomingEventsStrip() {
         background: "linear-gradient(135deg, #fef8ee, #fdf0d5)",
         border: "1px solid #e8d9bb",
         borderRadius: 3,
-        px: { xs: 3, md: 4 },
+        px: { xs: 2, md: 4 },
         py: 3,
         mb: 4,
       }}
@@ -116,8 +116,8 @@ export function UpcomingEventsStrip() {
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 2,
-                  px: 2,
+                  gap: { xs: 1.5, sm: 2 },
+                  px: { xs: 1.5, sm: 2 },
                   py: 1,
                   borderRadius: 2,
                   cursor: "pointer",
@@ -130,6 +130,7 @@ export function UpcomingEventsStrip() {
                     fontWeight: 700,
                     color: "#7c5c2a",
                     minWidth: 56,
+                    flexShrink: 0,
                     fontSize: "0.9rem",
                   }}
                 >
@@ -138,11 +139,9 @@ export function UpcomingEventsStrip() {
                 <Typography
                   sx={{
                     flex: 1,
+                    minWidth: 0,
                     fontWeight: 600,
                     color: "#5c4a2a",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
                   }}
                 >
                   {event.title}
@@ -152,6 +151,7 @@ export function UpcomingEventsStrip() {
                     display: "flex",
                     alignItems: "center",
                     gap: 0.5,
+                    flexShrink: 0,
                     color: "#9a7a4a",
                   }}
                 >
